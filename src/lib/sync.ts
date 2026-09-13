@@ -48,23 +48,38 @@ export async function runFullSync() {
       return { success: true, count: 0 };
     }
 
-    // 3. Ingest Instagram
+    // 3. Ingest Instagram based on SCRAPER_MODE (auto | local | apify)
     const igHandles = creators
       .map((c) => c.instagramHandle)
       .filter((h): h is string => Boolean(h));
 
-    let igResults = await fetchInstagramViaApify(igHandles);
-    const hasApifyData = Object.keys(igResults).some(
-      (k) => igResults[k].posts.length > 0
-    );
+    const scraperMode = (process.env.SCRAPER_MODE || settingsMap.get("scraper_mode") || "auto").toLowerCase();
+    let igResults: Record<string, any> = {};
 
-    // Fallback to local browser if Apify returned no items
-    if (!hasApifyData) {
-      console.log("Falling back to local headless browser scraper...");
-      igResults = {};
+    if (scraperMode === "local") {
+      console.log("[Sync Engine] SCRAPER_MODE=local: Using local headless browser...");
       for (const h of igHandles) {
         const localRes = await fetchInstagramViaLocalBrowser(h);
         igResults[h.toLowerCase()] = localRes;
+      }
+    } else if (scraperMode === "apify") {
+      console.log("[Sync Engine] SCRAPER_MODE=apify: Using Apify cloud actor...");
+      igResults = await fetchInstagramViaApify(igHandles);
+    } else {
+      // auto mode
+      console.log("[Sync Engine] SCRAPER_MODE=auto: Attempting Apify with local fallback...");
+      igResults = await fetchInstagramViaApify(igHandles);
+      const hasApifyData = Object.keys(igResults).some(
+        (k) => igResults[k]?.posts?.length > 0
+      );
+
+      if (!hasApifyData) {
+        console.log("[Sync Engine] Falling back to local headless browser scraper...");
+        igResults = {};
+        for (const h of igHandles) {
+          const localRes = await fetchInstagramViaLocalBrowser(h);
+          igResults[h.toLowerCase()] = localRes;
+        }
       }
     }
 

@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
+    "prepare:db": "node scripts/prepare-schema.js",
+    "dev": "npm run prepare:db && next dev",
+    "build": "npm run prepare:db && prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "sync": "node -r dotenv/config scripts/sync-cli.js",
-    "postinstall": "prisma generate"
+    "db:push": "npm run prepare:db && prisma db push",
+    "db:seed": "node scripts/seed.js",
+    "postinstall": "npm run prepare:db && prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",
