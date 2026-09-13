@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.env*
+*.db
+*.db-journal
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+docs

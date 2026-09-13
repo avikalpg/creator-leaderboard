@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Creator {
+  id               String           @id @default(cuid())
+  name             String
+  houseName        String           @default("Gryffindor")
+  instagramHandle  String?
+  youtubeChannelId String?
+  youtubeHandle    String?
+  targetCadence    String           @default("ALTERNATE") // DAILY, ALTERNATE, BIWEEKLY, WEEKLY
+  avatarUrl        String?
+  bio              String?
+  followersCount   Int              @default(0)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  posts            PostSnapshot[]
+  metrics          MetricSnapshot[]
+}
+
+model PostSnapshot {
+  id            String   @id @default(cuid())
+  creatorId     String
+  creator       Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  platform      String   // INSTAGRAM or YOUTUBE
+  externalId    String   // shortcode or videoId
+  url           String
+  title         String?
+  views         Int      @default(0)
+  likes         Int      @default(0)
+  comments      Int      @default(0)
+  publishedAt   DateTime
+  capturedAt    DateTime @default(now())
+  isBreakout    Boolean  @default(false)
+  breakoutRatio Float    @default(1.0)
+
+  @@unique([platform, externalId])
+  @@index([creatorId])
+  @@index([publishedAt])
+}
+
+model MetricSnapshot {
+  id                 String   @id @default(cuid())
+  creatorId          String
+  creator            Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  timestamp          DateTime @default(now())
+  consistencyScore   Float    @default(0)
+  viewVelocitySlope  Float    @default(0)
+  rollingMedianViews Float    @default(0)
+  breakoutRatio      Float    @default(1.0)
+  engagementDensity  Float    @default(0)
+  postsInWindow      Int      @default(0)
+  pointsTotal        Float    @default(0)
+
+  @@index([creatorId])
+  @@index([timestamp])
+}
+
+model Setting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model SyncLog {
+  id             String    @id @default(cuid())
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  status         String    @default("RUNNING") // RUNNING, SUCCESS, FAILED
+  creatorsCount  Int       @default(0)
+  postsCollected Int       @default(0)
+  summary        String?
+}
