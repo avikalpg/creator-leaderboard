@@ -1,0 +1,22 @@
+.gcloudignore
+.git
+.gitignore
+
+# Environment variables
+.env
+.env*.local
+
+# Build artifacts and dependencies
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# SQLite databases
+*.db
+*.db-journal
+
+# Documentation and design assets
+docs/
+.gstack/
