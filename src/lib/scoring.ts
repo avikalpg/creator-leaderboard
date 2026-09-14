@@ -198,6 +198,8 @@ export interface HouseStanding {
   rank: number;
 }
 
+export const OFFICIAL_HOUSES = ["Kaelix", "Orvane", "Myrith", "Syvora"];
+
 export function calculateHouseStandings(
   creatorsWithScores: Array<{
     houseName: string;
@@ -212,16 +214,33 @@ export function calculateHouseStandings(
     }>
   > = {};
 
+  for (const h of OFFICIAL_HOUSES) {
+    groups[h] = [];
+  }
+
   for (const c of creatorsWithScores) {
-    if (!groups[c.houseName]) groups[c.houseName] = [];
-    groups[c.houseName].push(c);
+    if (c.houseName && c.houseName !== "Unassigned") {
+      if (!groups[c.houseName]) groups[c.houseName] = [];
+      groups[c.houseName].push(c);
+    }
   }
 
   const result: HouseStanding[] = [];
 
   for (const [houseName, members] of Object.entries(groups)) {
     const memberCount = members.length;
-    if (memberCount === 0) continue;
+    if (memberCount === 0) {
+      result.push({
+        houseName,
+        memberCount: 0,
+        totalPoints: 0,
+        disciplineScore: 0,
+        momentumSlope: 0,
+        breakoutCount: 0,
+        rank: 0,
+      });
+      continue;
+    }
 
     const avgDiscipline =
       members.reduce((sum, m) => sum + m.score.consistencyScore, 0) / memberCount;

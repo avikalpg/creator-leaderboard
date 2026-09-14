@@ -193,6 +193,7 @@ export default function Home() {
         initialTab={adminTab}
         onClose={() => setAdminModalOpen(false)}
         onSuccess={loadData}
+        creators={creators}
         currentSettings={settings}
         lastSync={lastSync}
       />

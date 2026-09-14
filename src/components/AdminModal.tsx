@@ -1,13 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Plus, Sliders, RefreshCw, Lock, CheckCircle, AlertCircle } from "lucide-react";
+import { X, Plus, Sliders, RefreshCw, Lock, CheckCircle, AlertCircle, Users, Edit3, Trash2, Save } from "lucide-react";
+import { CreatorRowData } from "./CreatorTable";
+
+const COHORT_HOUSES = ["Kaelix", "Orvane", "Myrith", "Syvora", "Unassigned"];
 
 interface AdminModalProps {
   isOpen: boolean;
-  initialTab?: "creator" | "settings" | "sync";
+  initialTab?: "roster" | "creator" | "settings" | "sync";
   onClose: () => void;
   onSuccess: () => void;
+  creators?: CreatorRowData[];
   currentSettings?: {
     windowDays: number;
     minPostsForSlope: number;
@@ -27,26 +31,35 @@ interface AdminModalProps {
 
 export function AdminModal({
   isOpen,
-  initialTab = "creator",
+  initialTab = "roster",
   onClose,
   onSuccess,
+  creators = [],
   currentSettings,
   lastSync,
 }: AdminModalProps) {
-  const [activeTab, setActiveTab] = useState<"creator" | "settings" | "sync">(initialTab);
+  const [activeTab, setActiveTab] = useState<"roster" | "creator" | "settings" | "sync">(initialTab);
   const [password, setPassword] = useState("genc2026");
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(
     null
   );
   const [isLoading, setIsLoading] = useState(false);
 
-  // Form states
+  // Add Creator form state
   const [name, setName] = useState("");
-  const [houseName, setHouseName] = useState("House Matrix");
+  const [houseName, setHouseName] = useState("Orvane");
   const [instagramHandle, setInstagramHandle] = useState("");
   const [youtubeHandle, setYoutubeHandle] = useState("");
   const [targetCadence, setTargetCadence] = useState("ALTERNATE");
   const [bio, setBio] = useState("");
+
+  // Edit Creator state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editHouse, setEditHouse] = useState("Orvane");
+  const [editIg, setEditIg] = useState("");
+  const [editYt, setEditYt] = useState("");
+  const [editCadence, setEditCadence] = useState("ALTERNATE");
 
   // Settings states
   const [settings, setSettings] = useState(
@@ -62,6 +75,71 @@ export function AdminModal({
   );
 
   if (!isOpen) return null;
+
+  const handleStartEdit = (c: CreatorRowData) => {
+    setEditingId(c.id);
+    setEditName(c.name);
+    setEditHouse(c.houseName);
+    setEditIg(c.instagramHandle || "");
+    setEditYt(c.youtubeHandle || "");
+    setEditCadence(c.targetCadence);
+    setStatusMsg(null);
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    setIsLoading(true);
+    setStatusMsg(null);
+
+    try {
+      const res = await fetch("/api/creators", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          name: editName,
+          houseName: editHouse,
+          instagramHandle: editIg,
+          youtubeHandle: editYt,
+          targetCadence: editCadence,
+          password,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update creator");
+
+      setStatusMsg({ type: "success", text: `Updated "${editName}" successfully!` });
+      setEditingId(null);
+      onSuccess();
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteCreator = async (id: string, creatorName: string) => {
+    if (!confirm(`Are you sure you want to remove ${creatorName} from the cohort?`)) return;
+
+    setIsLoading(true);
+    setStatusMsg(null);
+
+    try {
+      const res = await fetch(`/api/creators?id=${id}&password=${encodeURIComponent(password)}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete creator");
+
+      setStatusMsg({ type: "success", text: `Removed "${creatorName}" from cohort.` });
+      onSuccess();
+    } catch (err: any) {
+      setStatusMsg({ type: "error", text: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAddCreator = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,12 +242,12 @@ export function AdminModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="bg-[#141414] border border-white/10 rounded-3xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-[#141414] border border-white/10 rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/5">
           <div className="flex items-center gap-2.5">
             <Lock className="w-4 h-4 text-neutral-400" />
-            <h3 className="font-serif text-lg font-medium text-white">Admin Controls</h3>
+            <h3 className="font-serif text-lg font-medium text-white">Cohort Admin & Roster</h3>
           </div>
           <button
             onClick={onClose}
@@ -181,13 +259,28 @@ export function AdminModal({
 
         {/* Password & Tabs Bar */}
         <div className="p-4 bg-black/40 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              onClick={() => {
+                setActiveTab("roster");
+                setStatusMsg(null);
+              }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all ${
+                activeTab === "roster"
+                  ? "bg-white text-black font-semibold shadow-sm"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Manage Roster</span>
+            </button>
+
             <button
               onClick={() => {
                 setActiveTab("creator");
                 setStatusMsg(null);
               }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all ${
                 activeTab === "creator"
                   ? "bg-white text-black font-semibold shadow-sm"
                   : "text-neutral-400 hover:text-white"
@@ -202,14 +295,14 @@ export function AdminModal({
                 setActiveTab("settings");
                 setStatusMsg(null);
               }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all ${
                 activeTab === "settings"
                   ? "bg-white text-black font-semibold shadow-sm"
                   : "text-neutral-400 hover:text-white"
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>Rules & Weights</span>
+              <span>Rules</span>
             </button>
 
             <button
@@ -217,19 +310,19 @@ export function AdminModal({
                 setActiveTab("sync");
                 setStatusMsg(null);
               }}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all ${
                 activeTab === "sync"
                   ? "bg-white text-black font-semibold shadow-sm"
                   : "text-neutral-400 hover:text-white"
               }`}
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Sync Controls</span>
+              <span>Sync</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-[10px] text-neutral-500 uppercase tracking-wider">Pass:</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="font-mono text-[10px] text-neutral-500 uppercase tracking-wider">Passphrase:</span>
             <input
               type="password"
               value={password}
@@ -258,7 +351,156 @@ export function AdminModal({
             </div>
           )}
 
-          {/* TAB 1: ADD CREATOR */}
+          {/* TAB 1: MANAGE ROSTER */}
+          {activeTab === "roster" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between pb-2">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+                  Registered Creators ({creators.length})
+                </span>
+                <span className="text-[11px] text-neutral-500">
+                  Houses: Kaelix, Orvane, Myrith, Syvora
+                </span>
+              </div>
+
+              {creators.map((c) => {
+                const isEditing = editingId === c.id;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={c.id}
+                      className="p-4 rounded-2xl bg-neutral-900 border border-white/20 space-y-3"
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase">Name</label>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase">House</label>
+                          <select
+                            value={editHouse}
+                            onChange={(e) => setEditHouse(e.target.value)}
+                            className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white cursor-pointer"
+                          >
+                            {COHORT_HOUSES.map((h) => (
+                              <option key={h} value={h}>
+                                {h}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase">Instagram</label>
+                          <input
+                            type="text"
+                            value={editIg}
+                            onChange={(e) => setEditIg(e.target.value)}
+                            className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                            placeholder="username"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase">YouTube</label>
+                          <input
+                            type="text"
+                            value={editYt}
+                            onChange={(e) => setEditYt(e.target.value)}
+                            className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                            placeholder="@handle"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-mono text-neutral-400 uppercase">Cadence</label>
+                          <select
+                            value={editCadence}
+                            onChange={(e) => setEditCadence(e.target.value)}
+                            className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white cursor-pointer"
+                          >
+                            <option value="DAILY">Daily</option>
+                            <option value="ALTERNATE">Alternate</option>
+                            <option value="BIWEEKLY">Biweekly</option>
+                            <option value="WEEKLY">Weekly</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(null)}
+                          className="px-3 py-1 rounded-full text-xs text-neutral-400 hover:text-white"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEdit(c.id)}
+                          disabled={isLoading}
+                          className="genc-btn-primary px-4 py-1 text-xs flex items-center gap-1.5"
+                        >
+                          <Save className="w-3 h-3" />
+                          <span>Save Changes</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={c.id}
+                    className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between hover:border-white/10 transition-colors"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-white text-sm">{c.name}</span>
+                        <span className="font-mono text-[10px] uppercase px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-neutral-300">
+                          {c.houseName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-neutral-500 mt-0.5">
+                        {c.instagramHandle && <span>IG: @{c.instagramHandle}</span>}
+                        {c.youtubeHandle && <span>• YT: {c.youtubeHandle}</span>}
+                        <span>• Cadence: {c.targetCadence.toLowerCase()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleStartEdit(c)}
+                        title="Edit Creator Details"
+                        className="p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCreator(c.id, c.name)}
+                        title="Remove Creator"
+                        className="p-1.5 rounded-full text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* TAB 2: ADD CREATOR */}
           {activeTab === "creator" && (
             <form onSubmit={handleAddCreator} className="space-y-4">
               <div>
@@ -268,7 +510,7 @@ export function AdminModal({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Sneha"
+                  placeholder="e.g. Saran, Samarth, Nitin"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
@@ -278,15 +520,19 @@ export function AdminModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-mono text-[11px] uppercase tracking-wider text-neutral-400 mb-1.5">
-                    House Name
+                    House Assignment
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. House Phoenix"
+                  <select
                     value={houseName}
                     onChange={(e) => setHouseName(e.target.value)}
-                    className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
-                  />
+                    className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 cursor-pointer"
+                  >
+                    {COHORT_HOUSES.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -313,7 +559,7 @@ export function AdminModal({
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. chaiandcontext"
+                    placeholder="e.g. techwithsoundu"
                     value={instagramHandle}
                     onChange={(e) => setInstagramHandle(e.target.value)}
                     className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
@@ -326,7 +572,7 @@ export function AdminModal({
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. @contrariantechie"
+                    placeholder="e.g. @TechWithSoundu"
                     value={youtubeHandle}
                     onChange={(e) => setYoutubeHandle(e.target.value)}
                     className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
@@ -340,7 +586,7 @@ export function AdminModal({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Product breakdowns, AI, Architecture"
+                  placeholder="e.g. AI, Architecture, Home Appliances"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
@@ -358,7 +604,7 @@ export function AdminModal({
             </form>
           )}
 
-          {/* TAB 2: RULES & WEIGHTS */}
+          {/* TAB 3: RULES & WEIGHTS */}
           {activeTab === "settings" && (
             <form onSubmit={handleSaveSettings} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -491,7 +737,7 @@ export function AdminModal({
             </form>
           )}
 
-          {/* TAB 3: SYNC CONTROLS */}
+          {/* TAB 4: SYNC CONTROLS */}
           {activeTab === "sync" && (
             <div className="space-y-4">
               <div className="p-4 bg-black/40 rounded-2xl border border-white/5">
