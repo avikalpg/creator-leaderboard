@@ -39,11 +39,23 @@ export function AdminModal({
   lastSync,
 }: AdminModalProps) {
   const [activeTab, setActiveTab] = useState<"roster" | "creator" | "settings" | "sync">(initialTab);
-  const [password, setPassword] = useState("genc2026");
+  const [password, setPassword] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("genc_admin_pass") || "";
+    }
+    return "";
+  });
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(
     null
   );
   const [isLoading, setIsLoading] = useState(false);
+
+  const handlePasswordChange = (val: string) => {
+    setPassword(val);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("genc_admin_pass", val);
+    }
+  };
 
   // Add Creator form state
   const [name, setName] = useState("");
@@ -87,6 +99,10 @@ export function AdminModal({
   };
 
   const handleSaveEdit = async (id: string) => {
+    if (!password.trim()) {
+      setStatusMsg({ type: "error", text: "Please enter the admin passphrase above to save changes." });
+      return;
+    }
     setIsLoading(true);
     setStatusMsg(null);
 
@@ -119,6 +135,10 @@ export function AdminModal({
   };
 
   const handleDeleteCreator = async (id: string, creatorName: string) => {
+    if (!password.trim()) {
+      setStatusMsg({ type: "error", text: "Please enter the admin passphrase above to delete a creator." });
+      return;
+    }
     if (!confirm(`Are you sure you want to remove ${creatorName} from the cohort?`)) return;
 
     setIsLoading(true);
@@ -143,6 +163,10 @@ export function AdminModal({
 
   const handleAddCreator = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!password.trim()) {
+      setStatusMsg({ type: "error", text: "Please enter the admin passphrase above to add a creator." });
+      return;
+    }
     setIsLoading(true);
     setStatusMsg(null);
 
@@ -179,6 +203,10 @@ export function AdminModal({
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!password.trim()) {
+      setStatusMsg({ type: "error", text: "Please enter the admin passphrase above to save settings." });
+      return;
+    }
     setIsLoading(true);
     setStatusMsg(null);
 
@@ -213,6 +241,10 @@ export function AdminModal({
   };
 
   const handleTriggerSync = async () => {
+    if (!password.trim()) {
+      setStatusMsg({ type: "error", text: "Please enter the admin passphrase above to run sync." });
+      return;
+    }
     setIsLoading(true);
     setStatusMsg(null);
 
@@ -322,12 +354,15 @@ export function AdminModal({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="font-mono text-[10px] text-neutral-500 uppercase tracking-wider">Passphrase:</span>
+            <span className="font-mono text-[10px] text-neutral-400 uppercase tracking-wider">
+              Admin Passphrase:
+            </span>
             <input
               type="password"
+              placeholder="Enter passphrase"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-24 bg-neutral-900 border border-white/10 rounded-full px-3 py-1 text-xs text-white font-mono focus:outline-none focus:border-white/30"
+              onChange={(e) => handlePasswordChange(e.target.value)}
+              className="w-32 sm:w-36 bg-black/60 border border-white/10 rounded-full px-3 py-1 text-xs text-white placeholder-neutral-600 font-mono focus:outline-none focus:border-white/30"
             />
           </div>
         </div>
