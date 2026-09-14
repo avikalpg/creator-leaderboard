@@ -21,6 +21,7 @@ coverage/
 out/
 build/
 dist/
+*.tsbuildinfo
 
 # OS metadata
 .DS_Store

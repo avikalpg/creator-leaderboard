@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Zap, ExternalLink, Sparkles } from "lucide-react";
+import { ExternalLink, Sparkles } from "lucide-react";
 
 interface BreakoutPost {
   id: string;
@@ -19,62 +19,68 @@ interface BreakoutPost {
 
 interface BreakoutAlertBannerProps {
   breakouts: BreakoutPost[];
-  onSelectCreator?: (creatorName: string) => void;
 }
 
 export function BreakoutAlertBanner({ breakouts }: BreakoutAlertBannerProps) {
   if (!breakouts || breakouts.length === 0) return null;
 
   return (
-    <div className="mb-8">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="p-1 rounded-md bg-amber-500/10 text-amber-400">
-          <Sparkles className="w-4 h-4" />
+    <section className="mb-12">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            <p className="font-mono text-[11px] uppercase tracking-widest text-neutral-400">
+              Breakout Hall of Fame
+            </p>
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl text-white font-medium tracking-tight">
+            Study-Worthy <span className="italic font-normal font-serif text-neutral-300">Outliers</span>
+          </h2>
         </div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-400">
-          Cohort Breakout Hall of Fame (Study-Worthy Reels)
-        </h2>
+        <p className="text-xs text-neutral-500 max-w-sm">
+          Reels exceeding 3× personal baseline. Study these hooks, scripts, and editing choices.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {breakouts.slice(0, 4).map((post) => (
           <div
             key={post.id}
-            className="group relative bg-gray-900/70 border border-amber-500/20 hover:border-amber-500/50 rounded-xl p-3.5 transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/5 hover:-translate-y-0.5"
+            className="genc-card genc-card-hover p-4 flex flex-col justify-between group"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                  <Zap className="w-2.5 h-2.5" />
-                  Viral Outlier
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/20">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  Breakout
                 </span>
-                <p className="font-semibold text-white text-sm mt-1.5 truncate">
-                  {post.creator.name}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {post.creator.houseName} • @{post.creator.instagramHandle}
-                </p>
-              </div>
 
-              <div className="text-right">
-                <span className="font-mono font-bold text-amber-400 text-base">
+                <span className="font-mono text-base font-bold text-white">
                   {post.views >= 1000
                     ? `${(post.views / 1000).toFixed(1)}k`
                     : post.views}{" "}
-                  <span className="text-[10px] text-gray-400 uppercase font-sans">views</span>
+                  <span className="text-[10px] text-neutral-500 uppercase font-sans font-normal">views</span>
                 </span>
               </div>
+
+              <h4 className="font-semibold text-white text-sm group-hover:text-amber-200 transition-colors line-clamp-1">
+                {post.creator.name}
+              </h4>
+              <p className="font-mono text-[11px] text-neutral-400 mt-0.5">
+                {post.creator.houseName} • @{post.creator.instagramHandle}
+              </p>
             </div>
 
-            <div className="mt-3 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
-              <span className="truncate max-w-[170px] text-gray-300">
+            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+              <span className="truncate max-w-[170px] text-neutral-500 text-[11px]">
                 {post.title ? `"${post.title}"` : "Reel"}
               </span>
               <a
                 href={post.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors"
+                className="flex items-center gap-1 text-neutral-300 hover:text-white transition-colors font-medium text-xs bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full border border-white/10"
               >
                 <span>Study</span>
                 <ExternalLink className="w-3 h-3" />
@@ -83,6 +89,6 @@ export function BreakoutAlertBanner({ breakouts }: BreakoutAlertBannerProps) {
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

@@ -55,7 +55,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-gray-100 flex flex-col">
+    <div className="min-h-screen bg-[#0D0D0D] text-white flex flex-col selection:bg-white selection:text-black">
       <Header
         creatorsCount={creators.length}
         housesCount={houses.length}
@@ -65,64 +65,86 @@ export default function Home() {
         isRefreshing={isRefreshing}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16 flex-1 w-full">
+        {/* GenC Editorial Hero */}
+        <section className="text-center py-10 sm:py-14 max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-3.5 py-1 mb-5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-mono text-[11px] uppercase tracking-widest text-neutral-300">
+              GenC Creator Cohort • Benchmark
+            </span>
+          </div>
+
+          <h1 className="font-serif text-4xl sm:text-6xl font-medium tracking-tight text-white leading-[1.15]">
+            Momentum, Cadence &{" "}
+            <span className="italic font-normal font-serif text-neutral-300">Breakouts</span>
+          </h1>
+
+          <p className="mt-4 text-sm sm:text-base text-neutral-400 font-sans max-w-xl mx-auto leading-relaxed">
+            A level playing field measuring view acceleration, posting discipline, and creative breakthroughs—not vanity follower counts.
+          </p>
+        </section>
+
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
-            <RefreshCw className="w-8 h-8 animate-spin text-indigo-500" />
-            <p className="text-sm font-medium">Calculating GenC cohort metrics...</p>
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-neutral-400">
+            <RefreshCw className="w-6 h-6 animate-spin text-white" />
+            <p className="font-mono text-xs uppercase tracking-wider text-neutral-500">
+              Syncing cohort metrics...
+            </p>
           </div>
         ) : (
           <>
             {/* Breakout Banner */}
             <BreakoutAlertBanner breakouts={breakouts} />
 
-            {/* Navigation Tabs */}
-            <div className="flex items-center gap-2 border-b border-gray-800 pb-3 mb-6">
+            {/* Navigation Tabs (Pill style) */}
+            <div className="flex items-center justify-center sm:justify-start gap-2 mb-6">
               <button
                 onClick={() => setActiveTab("leaderboard")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium transition-all ${
                   activeTab === "leaderboard"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "text-gray-400 hover:text-white hover:bg-gray-900"
+                    ? "bg-white text-black font-semibold shadow-md"
+                    : "bg-white/5 text-neutral-400 hover:text-white border border-white/5 hover:border-white/15"
                 }`}
               >
-                <Trophy className="w-4 h-4" />
+                <Trophy className="w-3.5 h-3.5" />
                 <span>Creator Leaderboard</span>
               </button>
 
               <button
                 onClick={() => setActiveTab("houses")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium transition-all ${
                   activeTab === "houses"
-                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-                    : "text-gray-400 hover:text-white hover:bg-gray-900"
+                    ? "bg-white text-black font-semibold shadow-md"
+                    : "bg-white/5 text-neutral-400 hover:text-white border border-white/5 hover:border-white/15"
                 }`}
               >
-                <Shield className="w-4 h-4" />
+                <Shield className="w-3.5 h-3.5" />
                 <span>The House Cup</span>
-                <span className="text-[10px] font-mono bg-indigo-950/80 px-1.5 py-0.5 rounded text-indigo-300">
+                <span className="font-mono text-[10px] bg-neutral-800 px-1.5 py-0.2 rounded-full text-neutral-300">
                   {houses.length}
                 </span>
               </button>
             </div>
 
-            {/* Views */}
+            {/* Tab Views */}
             {activeTab === "leaderboard" && (
-              <div>
-                <CreatorTable
-                  creators={creators}
-                  onSelectCreator={(c) => setSelectedCreator(c)}
-                />
-              </div>
+              <CreatorTable
+                creators={creators}
+                onSelectCreator={(c) => setSelectedCreator(c)}
+              />
             )}
 
             {activeTab === "houses" && (
               <div>
                 <HouseStandings houses={houses} />
-                <div className="mt-8">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">
-                    Member Breakdown By House
-                  </h3>
+                <div className="mt-12">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                    <h3 className="font-mono text-[11px] uppercase tracking-widest text-neutral-400">
+                      Roster Breakdown By House
+                    </h3>
+                  </div>
                   <CreatorTable
                     creators={creators}
                     onSelectCreator={(c) => setSelectedCreator(c)}
@@ -134,19 +156,33 @@ export default function Home() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-850 py-6 text-center text-xs text-gray-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>Built for the GenC Creator Cohort • Momentum & Consistency First</p>
+      {/* Minimal Footer */}
+      <footer className="border-t border-white/5 py-8 text-neutral-500 text-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
+            <span className="font-mono text-neutral-400 font-medium">GenC</span>
+            <span>•</span>
+            <p>Designed for the GenC Creator Cohort</p>
+          </div>
+
+          <div className="flex items-center gap-4 font-mono text-[11px] text-neutral-500">
             <span>Updates every 6–12h</span>
             <span>•</span>
             <button
               onClick={() => handleOpenAdmin("sync")}
-              className="text-indigo-400 hover:underline"
+              className="text-neutral-400 hover:text-white transition-colors"
             >
-              Sync Dashboard
+              Sync Engine
             </button>
+            <span>•</span>
+            <a
+              href="https://www.genc.club"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-neutral-400 hover:text-white transition-colors"
+            >
+              genc.club ↗
+            </a>
           </div>
         </div>
       </footer>
