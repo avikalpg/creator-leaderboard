@@ -21,32 +21,51 @@ export async function fetchYouTubeChannelVideos(
 
   try {
     let resolvedChannelId = channelIdOrHandle;
+    let followers = 0;
 
-    // 1. Resolve handle to channel ID if needed
+    // 1. Resolve handle using official YouTube forHandle endpoint
     if (channelIdOrHandle.startsWith("@") || !channelIdOrHandle.startsWith("UC")) {
       const handleClean = channelIdOrHandle.replace("@", "");
-      const searchRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
+      const handleRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?forHandle=${encodeURIComponent(
           handleClean
-        )}&type=channel&maxResults=1&key=${key}`
+        )}&part=snippet,statistics&key=${key}`
       );
-      if (searchRes.ok) {
-        const searchData = await searchRes.json();
-        if (searchData.items && searchData.items.length > 0) {
-          resolvedChannelId = searchData.items[0].snippet.channelId;
+
+      if (handleRes.ok) {
+        const handleData = await handleRes.json();
+        if (handleData.items && handleData.items.length > 0) {
+          resolvedChannelId = handleData.items[0].id;
+          followers = parseInt(handleData.items[0].statistics?.subscriberCount || "0", 10);
+        }
+      }
+
+      // Fallback search if forHandle didn't resolve
+      if (!resolvedChannelId.startsWith("UC")) {
+        const searchRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(
+            handleClean
+          )}&type=channel&maxResults=1&key=${key}`
+        );
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          if (searchData.items && searchData.items.length > 0) {
+            resolvedChannelId = searchData.items[0].snippet.channelId;
+          }
         }
       }
     }
 
-    // 2. Fetch channel statistics (subscriber count)
-    let followers = 0;
-    const channelRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${resolvedChannelId}&key=${key}`
-    );
-    if (channelRes.ok) {
-      const channelData = await channelRes.json();
-      if (channelData.items && channelData.items.length > 0) {
-        followers = parseInt(channelData.items[0].statistics.subscriberCount || "0", 10);
+    // 2. Fetch channel statistics if not already obtained
+    if (followers === 0 && resolvedChannelId.startsWith("UC")) {
+      const channelRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${resolvedChannelId}&key=${key}`
+      );
+      if (channelRes.ok) {
+        const channelData = await channelRes.json();
+        if (channelData.items && channelData.items.length > 0) {
+          followers = parseInt(channelData.items[0].statistics.subscriberCount || "0", 10);
+        }
       }
     }
 

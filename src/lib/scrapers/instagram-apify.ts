@@ -20,16 +20,17 @@ export async function fetchInstagramViaApify(
   if (cleanUsernames.length === 0) return {};
 
   try {
-    console.log(`Starting Apify Instagram scrape for ${cleanUsernames.length} handles...`);
+    const directUrls = cleanUsernames.map((u) => `https://www.instagram.com/${u}/reels/`);
+
+    console.log(`Starting Apify Instagram scrape for ${cleanUsernames.length} handles (${directUrls.length} reel URLs)...`);
     const runRes = await fetch(
-      `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&timeout=120`,
+      `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${token}&timeout=180`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          usernames: cleanUsernames,
-          resultsType: "posts",
-          resultsLimit: 12,
+          directUrls,
+          resultsLimit: 15,
         }),
       }
     );
