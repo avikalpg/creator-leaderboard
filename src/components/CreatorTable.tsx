@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Search,
   SlidersHorizontal,
+  Info,
 } from "lucide-react";
 
 export interface CreatorRowData {
@@ -45,9 +46,10 @@ export interface CreatorRowData {
 interface CreatorTableProps {
   creators: CreatorRowData[];
   onSelectCreator: (creator: CreatorRowData) => void;
+  onOpenHowItWorks?: (sectionId: string) => void;
 }
 
-export function CreatorTable({ creators, onSelectCreator }: CreatorTableProps) {
+export function CreatorTable({ creators, onSelectCreator, onOpenHowItWorks }: CreatorTableProps) {
   const [search, setSearch] = useState("");
   const [houseFilter, setHouseFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState<
@@ -172,11 +174,96 @@ export function CreatorTable({ creators, onSelectCreator }: CreatorTableProps) {
               <th className="py-3.5 px-4 w-14 text-center">Rank</th>
               <th className="py-3.5 px-4">Creator</th>
               <th className="py-3.5 px-4">House</th>
-              <th className="py-3.5 px-4">Cadence Discipline</th>
-              <th className="py-3.5 px-4">View Velocity (Slope)</th>
-              <th className="py-3.5 px-4">Outlier Ratio</th>
-              <th className="py-3.5 px-4">Engagement</th>
-              <th className="py-3.5 px-4 text-right">Points</th>
+              <th className="py-3.5 px-4">
+                <div className="flex items-center gap-1">
+                  <span>Cadence Discipline</span>
+                  {onOpenHowItWorks && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenHowItWorks("cadence-discipline");
+                      }}
+                      title="Learn about Cadence Discipline formula"
+                      className="text-neutral-500 hover:text-white transition-colors"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </th>
+              <th className="py-3.5 px-4">
+                <div className="flex items-center gap-1">
+                  <span>View Velocity (Slope)</span>
+                  {onOpenHowItWorks && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenHowItWorks("view-velocity");
+                      }}
+                      title="Learn about View Velocity Slope formula"
+                      className="text-neutral-500 hover:text-white transition-colors"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </th>
+              <th className="py-3.5 px-4">
+                <div className="flex items-center gap-1">
+                  <span>Outlier Ratio</span>
+                  {onOpenHowItWorks && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenHowItWorks("outlier-ratio");
+                      }}
+                      title="Learn about Outlier Ratio formula"
+                      className="text-neutral-500 hover:text-white transition-colors"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </th>
+              <th className="py-3.5 px-4">
+                <div className="flex items-center gap-1">
+                  <span>Engagement</span>
+                  {onOpenHowItWorks && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenHowItWorks("engagement-density");
+                      }}
+                      title="Learn about Engagement Density formula"
+                      className="text-neutral-500 hover:text-white transition-colors"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </th>
+              <th className="py-3.5 px-4 text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <span>Points</span>
+                  {onOpenHowItWorks && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenHowItWorks("points-total");
+                      }}
+                      title="Learn about Cohort Points formula"
+                      className="text-neutral-500 hover:text-white transition-colors"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </th>
               <th className="py-3.5 px-3 w-8"></th>
             </tr>
           </thead>

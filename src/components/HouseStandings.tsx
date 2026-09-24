@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Shield, Target, Award, Users, TrendingUp } from "lucide-react";
+import { Shield, Target, Award, Users, TrendingUp, Info } from "lucide-react";
 
 export interface HouseData {
   houseName: string;
@@ -15,9 +15,10 @@ export interface HouseData {
 
 interface HouseStandingsProps {
   houses: HouseData[];
+  onOpenHowItWorks?: (sectionId: string) => void;
 }
 
-export function HouseStandings({ houses }: HouseStandingsProps) {
+export function HouseStandings({ houses, onOpenHowItWorks }: HouseStandingsProps) {
   if (!houses || houses.length === 0) return null;
 
   return (
@@ -30,9 +31,20 @@ export function HouseStandings({ houses }: HouseStandingsProps) {
               Cohort Team Dynamics
             </p>
           </div>
-          <h2 className="font-serif text-2xl sm:text-3xl text-white font-medium tracking-tight">
-            The House <span className="italic font-normal font-serif text-neutral-300">Cup</span>
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-serif text-2xl sm:text-3xl text-white font-medium tracking-tight">
+              The House <span className="italic font-normal font-serif text-neutral-300">Cup</span>
+            </h2>
+            {onOpenHowItWorks && (
+              <button
+                onClick={() => onOpenHowItWorks("house-cup")}
+                title="How the House Cup points are calculated"
+                className="text-neutral-500 hover:text-white transition-colors p-1"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-xs text-neutral-500 max-w-sm">
           Scored by collective member discipline + median momentum slope + team breakout bonuses.

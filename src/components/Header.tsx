@@ -2,13 +2,14 @@
 
 import React from "react";
 import { GenCLogo } from "./GenCLogo";
-import { Plus, Settings, RefreshCw } from "lucide-react";
+import { Plus, Settings, RefreshCw, HelpCircle } from "lucide-react";
 
 interface HeaderProps {
   creatorsCount: number;
   housesCount: number;
   lastSyncTime?: string;
   onOpenAdmin: (tab?: "creator" | "settings" | "sync") => void;
+  onOpenHowItWorks: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
 }
@@ -18,6 +19,7 @@ export function Header({
   housesCount,
   lastSyncTime,
   onOpenAdmin,
+  onOpenHowItWorks,
   onRefresh,
   isRefreshing,
 }: HeaderProps) {
@@ -72,6 +74,15 @@ export function Header({
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Creator</span>
+          </button>
+
+          <button
+            onClick={onOpenHowItWorks}
+            className="genc-btn-secondary text-xs p-2 sm:px-3 sm:py-2 flex items-center gap-1.5"
+            title="How It Works & Metric Formulas"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-neutral-300" />
+            <span className="hidden sm:inline">How It Works</span>
           </button>
 
           <button

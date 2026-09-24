@@ -25,31 +25,79 @@ function findChromePath() {
   return null;
 }
 
+async function getBrowserInstance() {
+  let puppeteer = null;
+  try {
+    puppeteer = require("puppeteer-core");
+  } catch {
+    return { browser: null, isConnected: false };
+  }
+
+  // 1. Try connecting to already running Chrome with remote debugging on port 9222
+  try {
+    const browser = await puppeteer.connect({ browserURL: "http://127.0.0.1:9222" });
+    console.log("Connected to existing Chrome on port 9222.");
+    return { browser, isConnected: true };
+  } catch {}
+
+  // 2. Launch new headless Chrome
+  const chromePath = findChromePath();
+  if (chromePath) {
+    console.log(`Launching headless Chrome at ${chromePath}...`);
+    const browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: "new",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--user-data-dir=/tmp/genc-chrome-session",
+      ],
+    });
+    return { browser, isConnected: false };
+  }
+
+  return { browser: null, isConnected: false };
+}
+
 async function fetchReelsViaPuppeteer(browser, handle) {
   const page = await browser.newPage();
   try {
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
     const url = `https://www.instagram.com/${handle}/reels/`;
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
     await new Promise((r) => setTimeout(r, 2000));
 
     const result = await page.evaluate(() => {
-      const anchors = Array.from(document.querySelectorAll('a[href*="/reel/"]'));
-      const headerTexts = Array.from(document.querySelectorAll('header span, header h2, header h1')).map((e) => e.innerText.trim()).filter(Boolean);
+      const anchors = Array.from(document.querySelectorAll("a")).filter((a) => a.href && (a.href.includes("/reel/") || a.href.includes("/p/")));
+      const headerTexts = Array.from(document.querySelectorAll("header span, header h2, header h1, header p, main header *"))
+        .map((e) => (e.innerText || "").trim())
+        .filter(Boolean);
 
       let followers = 0;
       for (const text of headerTexts) {
-        if (text.includes("followers")) {
-          const num = text.replace(/[^0-9.]/g, "");
-          if (text.toLowerCase().includes("k")) followers = Math.round(parseFloat(num) * 1000);
-          else if (text.toLowerCase().includes("m")) followers = Math.round(parseFloat(num) * 1000000);
-          else followers = parseInt(num.replace(/,/g, ""), 10) || 0;
-          break;
+        const match = text.match(/([\d,.]+)\s*([km])?\s*followers?/i) || text.match(/followers?[:\s]*([\d,.]+)\s*([km])?/i);
+        if (match) {
+          const rawNum = parseFloat(match[1].replace(/,/g, "")) || 0;
+          const mult = (match[2] || "").toLowerCase() === "m" ? 1000000 : (match[2] || "").toLowerCase() === "k" ? 1000 : 1;
+          const parsed = Math.round(rawNum * mult);
+          if (parsed > 0 && parsed < 2000000000) {
+            followers = parsed;
+            break;
+          }
         }
       }
 
       const reels = anchors.slice(0, 15).map((a) => {
-        const viewRaw = a.innerText.trim();
+        let viewRaw = (a.innerText || "").trim();
+        if (!viewRaw) {
+          const span = Array.from(a.querySelectorAll("span"))
+            .map((s) => (s.innerText || "").trim())
+            .find((t) => /\d/.test(t));
+          if (span) viewRaw = span;
+        }
+
         let views = 0;
         if (viewRaw) {
           const clean = viewRaw.replace(/[^0-9.]/g, "");
@@ -57,7 +105,7 @@ async function fetchReelsViaPuppeteer(browser, handle) {
           else if (viewRaw.toLowerCase().includes("m")) views = Math.round(parseFloat(clean) * 1000000);
           else views = parseInt(viewRaw.replace(/,/g, ""), 10) || 0;
         }
-        const m = a.href.match(/\/reel\/([^\/]+)/);
+        const m = a.href.match(/\/(?:reel|p)\/([^\/]+)/);
         return {
           url: a.href,
           shortcode: m ? m[1] : "",
@@ -121,98 +169,94 @@ async function main() {
   console.log(`Loaded ${creators.length} creators from database.`);
 
   const ytKey = process.env.YOUTUBE_API_KEY;
-  const chromePath = findChromePath();
-  let puppeteer = null;
+  const { browser, isConnected } = await getBrowserInstance();
 
-  try {
-    puppeteer = require("puppeteer-core");
-  } catch {}
-
-  let browser = null;
-  if (puppeteer && chromePath) {
-    console.log(`Launching headless Chrome at ${chromePath}...`);
-    browser = await puppeteer.launch({
-      executablePath: chromePath,
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-    });
+  if (!browser) {
+    console.error("No browser available (neither port 9222 nor local Chrome binary).");
+    process.exit(1);
   }
 
   let totalCollected = 0;
 
-  for (const c of creators) {
-    console.log(`Processing: ${c.name} (${c.houseName})...`);
+  try {
+    for (const c of creators) {
+      console.log(`Processing: ${c.name} (${c.houseName})...`);
 
-    // Instagram
-    if (c.instagramHandle && browser) {
-      try {
-        const igData = await fetchReelsViaPuppeteer(browser, c.instagramHandle);
-        if (igData.followers > 0 && igData.followers !== c.followersCount) {
-          await prisma.creator.update({ where: { id: c.id }, data: { followersCount: igData.followers } });
+      // Instagram
+      if (c.instagramHandle) {
+        try {
+          const igData = await fetchReelsViaPuppeteer(browser, c.instagramHandle);
+          if (igData.followers > 0 && igData.followers !== c.followersCount && igData.followers < 2000000000) {
+            await prisma.creator.update({ where: { id: c.id }, data: { followersCount: igData.followers } });
+          }
+
+          for (let i = 0; i < igData.reels.length; i++) {
+            const r = igData.reels[i];
+            if (!r.shortcode) continue;
+            const daysAgo = i * 2;
+            const pubDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+
+            await prisma.postSnapshot.upsert({
+              where: { platform_externalId: { platform: "INSTAGRAM", externalId: r.shortcode } },
+              update: { views: r.views, capturedAt: new Date() },
+              create: {
+                creatorId: c.id,
+                platform: "INSTAGRAM",
+                externalId: r.shortcode,
+                url: r.url,
+                views: r.views,
+                likes: Math.round(r.views * 0.05),
+                comments: Math.round(r.views * 0.005),
+                publishedAt: pubDate,
+                capturedAt: new Date(),
+              },
+            });
+            totalCollected++;
+          }
+          console.log(`  ✓ IG @${c.instagramHandle}: ${igData.reels.length} reels, ${igData.followers} followers`);
+        } catch (err) {
+          console.error(`  ✗ IG @${c.instagramHandle} failed:`, err.message);
         }
+      }
 
-        for (let i = 0; i < igData.reels.length; i++) {
-          const r = igData.reels[i];
-          if (!r.shortcode) continue;
-          const daysAgo = i * 2;
-          const pubDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
-
-          await prisma.postSnapshot.upsert({
-            where: { platform_externalId: { platform: "INSTAGRAM", externalId: r.shortcode } },
-            update: { views: r.views, capturedAt: new Date() },
-            create: {
-              creatorId: c.id,
-              platform: "INSTAGRAM",
-              externalId: r.shortcode,
-              url: r.url,
-              views: r.views,
-              likes: Math.round(r.views * 0.05),
-              comments: Math.round(r.views * 0.005),
-              publishedAt: pubDate,
-              capturedAt: new Date(),
-            },
-          });
-          totalCollected++;
+      // YouTube
+      if (c.youtubeHandle && ytKey) {
+        try {
+          const ytData = await fetchYouTubeVideos(c.youtubeHandle, ytKey);
+          for (const p of ytData.posts) {
+            await prisma.postSnapshot.upsert({
+              where: { platform_externalId: { platform: "YOUTUBE", externalId: p.externalId } },
+              update: { views: p.views, likes: p.likes, comments: p.comments, capturedAt: new Date() },
+              create: {
+                creatorId: c.id,
+                platform: "YOUTUBE",
+                externalId: p.externalId,
+                url: p.url,
+                title: p.title,
+                views: p.views,
+                likes: p.likes,
+                comments: p.comments,
+                publishedAt: p.publishedAt,
+                capturedAt: new Date(),
+              },
+            });
+            totalCollected++;
+          }
+          if (ytData.posts.length > 0) {
+            console.log(`  ✓ YT ${c.youtubeHandle}: ${ytData.posts.length} videos`);
+          }
+        } catch (err) {
+          console.error(`  ✗ YT ${c.youtubeHandle} failed:`, err.message);
         }
-        console.log(`  ✓ IG @${c.instagramHandle}: ${igData.reels.length} reels, ${igData.followers} followers`);
-      } catch (err) {
-        console.error(`  ✗ IG @${c.instagramHandle} failed:`, err.message);
       }
     }
-
-    // YouTube
-    if (c.youtubeHandle && ytKey) {
-      try {
-        const ytData = await fetchYouTubeVideos(c.youtubeHandle, ytKey);
-        for (const p of ytData.posts) {
-          await prisma.postSnapshot.upsert({
-            where: { platform_externalId: { platform: "YOUTUBE", externalId: p.externalId } },
-            update: { views: p.views, likes: p.likes, comments: p.comments, capturedAt: new Date() },
-            create: {
-              creatorId: c.id,
-              platform: "YOUTUBE",
-              externalId: p.externalId,
-              url: p.url,
-              title: p.title,
-              views: p.views,
-              likes: p.likes,
-              comments: p.comments,
-              publishedAt: p.publishedAt,
-              capturedAt: new Date(),
-            },
-          });
-          totalCollected++;
-        }
-        if (ytData.posts.length > 0) {
-          console.log(`  ✓ YT ${c.youtubeHandle}: ${ytData.posts.length} videos`);
-        }
-      } catch (err) {
-        console.error(`  ✗ YT ${c.youtubeHandle} failed:`, err.message);
-      }
+  } finally {
+    if (isConnected) {
+      browser.disconnect();
+    } else {
+      await browser.close();
     }
   }
-
-  if (browser) await browser.close();
 
   // Recalculate metrics for all creators
   console.log("\nRecalculating 2nd-order metrics & slopes...");

@@ -78,19 +78,61 @@ export async function GET() {
       settings
     );
 
-    // Get breakouts
-    const breakouts = await prisma.postSnapshot.findMany({
-      where: {
-        views: { gt: 100 },
-      },
-      orderBy: { views: "desc" },
-      take: 8,
-      include: {
-        creator: {
-          select: { name: true, houseName: true, instagramHandle: true },
-        },
-      },
-    });
+    // Get true personal baseline outliers (1 top breakout per creator, ranked by multiplier over median)
+    const creatorBreakouts: Array<{
+      id: string;
+      url: string;
+      views: number;
+      likes: number;
+      comments: number;
+      title?: string | null;
+      ratio: number;
+      medianViews: number;
+      creator: {
+        name: string;
+        houseName: string;
+        instagramHandle?: string | null;
+      };
+    }> = [];
+
+    for (const c of creators) {
+      if (!c.posts || c.posts.length === 0) continue;
+      const sortedViews = c.posts.map((p) => p.views).sort((a, b) => a - b);
+      const mid = Math.floor(sortedViews.length / 2);
+      const median = Math.max(50, sortedViews[mid] || 100);
+
+      let bestPost = c.posts[0];
+      let bestRatio = bestPost.views / median;
+
+      for (const p of c.posts) {
+        const r = p.views / median;
+        if (r > bestRatio) {
+          bestRatio = r;
+          bestPost = p;
+        }
+      }
+
+      if (bestRatio >= 2.0 && bestPost.views >= 100) {
+        creatorBreakouts.push({
+          id: bestPost.id,
+          url: bestPost.url,
+          views: bestPost.views,
+          likes: bestPost.likes,
+          comments: bestPost.comments,
+          title: bestPost.title,
+          ratio: Number(bestRatio.toFixed(1)),
+          medianViews: median,
+          creator: {
+            name: c.name,
+            houseName: c.houseName,
+            instagramHandle: c.instagramHandle,
+          },
+        });
+      }
+    }
+
+    creatorBreakouts.sort((a, b) => b.ratio - a.ratio);
+    const breakouts = creatorBreakouts.slice(0, 8);
 
     const lastSync = await prisma.syncLog.findFirst({
       orderBy: { startedAt: "desc" },

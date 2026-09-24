@@ -7,6 +7,7 @@ import { HouseStandings, HouseData } from "@/components/HouseStandings";
 import { CreatorTable, CreatorRowData } from "@/components/CreatorTable";
 import { AdminModal } from "@/components/AdminModal";
 import { CreatorDetailModal } from "@/components/CreatorDetailModal";
+import { HowItWorksModal } from "@/components/HowItWorksModal";
 import { Trophy, Shield, Sparkles, RefreshCw } from "lucide-react";
 
 export default function Home() {
@@ -23,7 +24,14 @@ export default function Home() {
   // Modals
   const [selectedCreator, setSelectedCreator] = useState<CreatorRowData | null>(null);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
-  const [adminTab, setAdminTab] = useState<"creator" | "settings" | "sync">("creator");
+  const [adminTab, setAdminTab] = useState<"roster" | "creator" | "settings" | "sync">("roster");
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const [activeHowItWorksSection, setActiveHowItWorksSection] = useState<string | null>(null);
+
+  const handleOpenHowItWorks = (section?: string) => {
+    setActiveHowItWorksSection(section || null);
+    setHowItWorksOpen(true);
+  };
 
   const loadData = async () => {
     try {
@@ -61,6 +69,7 @@ export default function Home() {
         housesCount={houses.length}
         lastSyncTime={lastSync?.completedAt}
         onOpenAdmin={handleOpenAdmin}
+        onOpenHowItWorks={() => handleOpenHowItWorks()}
         onRefresh={loadData}
         isRefreshing={isRefreshing}
       />
@@ -83,6 +92,15 @@ export default function Home() {
           <p className="mt-4 text-sm sm:text-base text-neutral-400 font-sans max-w-xl mx-auto leading-relaxed">
             A level playing field measuring view acceleration, posting discipline, and creative breakthroughs—not vanity follower counts.
           </p>
+
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <button
+              onClick={() => handleOpenHowItWorks()}
+              className="genc-btn-secondary text-xs px-4 py-2 font-mono flex items-center gap-1.5"
+            >
+              <span>Explore Metric Math & Formulas ↗</span>
+            </button>
+          </div>
         </section>
 
         {isLoading ? (
@@ -95,7 +113,10 @@ export default function Home() {
         ) : (
           <>
             {/* Breakout Banner */}
-            <BreakoutAlertBanner breakouts={breakouts} />
+            <BreakoutAlertBanner
+              breakouts={breakouts}
+              onOpenHowItWorks={handleOpenHowItWorks}
+            />
 
             {/* Navigation Tabs (Pill style) */}
             <div className="flex items-center justify-center sm:justify-start gap-2 mb-6">
@@ -132,12 +153,16 @@ export default function Home() {
               <CreatorTable
                 creators={creators}
                 onSelectCreator={(c) => setSelectedCreator(c)}
+                onOpenHowItWorks={handleOpenHowItWorks}
               />
             )}
 
             {activeTab === "houses" && (
               <div>
-                <HouseStandings houses={houses} />
+                <HouseStandings
+                  houses={houses}
+                  onOpenHowItWorks={handleOpenHowItWorks}
+                />
                 <div className="mt-12">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
@@ -148,6 +173,7 @@ export default function Home() {
                   <CreatorTable
                     creators={creators}
                     onSelectCreator={(c) => setSelectedCreator(c)}
+                    onOpenHowItWorks={handleOpenHowItWorks}
                   />
                 </div>
               </div>
@@ -166,7 +192,14 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-4 font-mono text-[11px] text-neutral-500">
-            <span>Updates every 6–12h</span>
+            <span>Updates every 15m via home daemon</span>
+            <span>•</span>
+            <button
+              onClick={() => handleOpenHowItWorks()}
+              className="text-neutral-400 hover:text-white transition-colors"
+            >
+              How It Works
+            </button>
             <span>•</span>
             <button
               onClick={() => handleOpenAdmin("sync")}
@@ -201,6 +234,12 @@ export default function Home() {
       <CreatorDetailModal
         creator={selectedCreator}
         onClose={() => setSelectedCreator(null)}
+      />
+
+      <HowItWorksModal
+        isOpen={howItWorksOpen}
+        activeSection={activeHowItWorksSection}
+        onClose={() => setHowItWorksOpen(false)}
       />
     </div>
   );

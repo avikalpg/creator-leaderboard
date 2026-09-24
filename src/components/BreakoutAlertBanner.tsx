@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ExternalLink, Sparkles } from "lucide-react";
+import { ExternalLink, Sparkles, Info } from "lucide-react";
 
 interface BreakoutPost {
   id: string;
@@ -10,6 +10,8 @@ interface BreakoutPost {
   likes: number;
   comments: number;
   title?: string | null;
+  ratio?: number;
+  medianViews?: number;
   creator: {
     name: string;
     houseName: string;
@@ -19,9 +21,10 @@ interface BreakoutPost {
 
 interface BreakoutAlertBannerProps {
   breakouts: BreakoutPost[];
+  onOpenHowItWorks?: (sectionId: string) => void;
 }
 
-export function BreakoutAlertBanner({ breakouts }: BreakoutAlertBannerProps) {
+export function BreakoutAlertBanner({ breakouts, onOpenHowItWorks }: BreakoutAlertBannerProps) {
   if (!breakouts || breakouts.length === 0) return null;
 
   return (
@@ -34,12 +37,23 @@ export function BreakoutAlertBanner({ breakouts }: BreakoutAlertBannerProps) {
               Breakout Hall of Fame
             </p>
           </div>
-          <h2 className="font-serif text-2xl sm:text-3xl text-white font-medium tracking-tight">
-            Study-Worthy <span className="italic font-normal font-serif text-neutral-300">Outliers</span>
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-serif text-2xl sm:text-3xl text-white font-medium tracking-tight">
+              Study-Worthy <span className="italic font-normal font-serif text-neutral-300">Outliers</span>
+            </h2>
+            {onOpenHowItWorks && (
+              <button
+                onClick={() => onOpenHowItWorks("outlier-ratio")}
+                title="How Outliers are calculated"
+                className="text-neutral-500 hover:text-white transition-colors p-1"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-xs text-neutral-500 max-w-sm">
-          Reels exceeding 3× personal baseline. Study these hooks, scripts, and editing choices.
+          Top breakthrough post per creator, ranked by multiplier over their personal median baseline.
         </p>
       </div>
 
@@ -53,15 +67,22 @@ export function BreakoutAlertBanner({ breakouts }: BreakoutAlertBannerProps) {
               <div className="flex items-center justify-between mb-3">
                 <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/20">
                   <Sparkles className="w-2.5 h-2.5" />
-                  Breakout
+                  {post.ratio ? `${post.ratio}x Outlier` : "Breakout"}
                 </span>
 
-                <span className="font-mono text-base font-bold text-white">
-                  {post.views >= 1000
-                    ? `${(post.views / 1000).toFixed(1)}k`
-                    : post.views}{" "}
-                  <span className="text-[10px] text-neutral-500 uppercase font-sans font-normal">views</span>
-                </span>
+                <div className="text-right">
+                  <span className="font-mono text-base font-bold text-white">
+                    {post.views >= 1000
+                      ? `${(post.views / 1000).toFixed(1)}k`
+                      : post.views}{" "}
+                    <span className="text-[10px] text-neutral-500 uppercase font-sans font-normal">views</span>
+                  </span>
+                  {post.medianViews && (
+                    <div className="font-mono text-[10px] text-neutral-500">
+                      median: {post.medianViews >= 1000 ? `${(post.medianViews / 1000).toFixed(1)}k` : post.medianViews}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <h4 className="font-semibold text-white text-sm group-hover:text-amber-200 transition-colors line-clamp-1">
