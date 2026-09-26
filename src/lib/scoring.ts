@@ -43,14 +43,35 @@ export interface CreatorScoreResult {
   badges: string[];
 }
 
+function computeOLS(values: number[]): number {
+  const n = values.length;
+  if (n < 2) return 0;
+  const x = Array.from({ length: n }, (_, i) => i);
+  const xBar = (n - 1) / 2;
+  const yBar = values.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (x[i] - xBar) * (values[i] - yBar);
+    den += Math.pow(x[i] - xBar, 2);
+  }
+  return den === 0 ? 0 : Number((num / den).toFixed(3));
+}
+
 export function calculateCreatorScore(
-  posts: RawPost[],
+  rawPosts: RawPost[],
   targetCadence: string,
-  settings: ScoringSettings = DEFAULT_SETTINGS
+  settings: ScoringSettings = DEFAULT_SETTINGS,
+  platformFilter: "ALL" | "INSTAGRAM" | "YOUTUBE" = "ALL"
 ): CreatorScoreResult {
   const now = new Date().getTime();
   const windowMs = settings.windowDays * 24 * 60 * 60 * 1000;
   const baselineMs = 30 * 24 * 60 * 60 * 1000;
+
+  // Filter by platform if requested
+  const posts =
+    platformFilter === "ALL"
+      ? rawPosts
+      : rawPosts.filter((p) => p.platform === platformFilter);
 
   // 1. Filter posts in window and baseline
   const recentPosts = posts
@@ -74,7 +95,7 @@ export function calculateCreatorScore(
   }
   rollingMedianViews = Math.max(50, rollingMedianViews);
 
-  // 2. Consistency & Regularity
+  // 2. Consistency & Regularity (Deduplicating same-day cross-posts)
   const cadenceTargets: Record<string, number> = {
     DAILY: 7,
     ALTERNATE: 3.5,
@@ -83,7 +104,13 @@ export function calculateCreatorScore(
   };
   const weeklyTarget = cadenceTargets[targetCadence.toUpperCase()] || 3.5;
   const expectedPosts = (weeklyTarget * settings.windowDays) / 7;
-  const executionRatio = Math.min(1.0, recentPosts.length / Math.max(1, expectedPosts));
+
+  // Group same-day posts across platforms so 1 video posted on IG + YT = 1 creative output day
+  const uniqueOutputDays = new Set(
+    recentPosts.map((p) => new Date(p.publishedAt).toISOString().split("T")[0])
+  );
+  const effectivePostsCount = uniqueOutputDays.size;
+  const executionRatio = Math.min(1.0, effectivePostsCount / Math.max(1, expectedPosts));
 
   let regularityMultiplier = 0.5;
   if (recentPosts.length >= 2) {
@@ -112,28 +139,54 @@ export function calculateCreatorScore(
     Math.round(100 * executionRatio * regularityMultiplier)
   );
 
-  // 3. View Velocity Slope (OLS Linear Regression on last N posts)
-  const sampleSize = Math.min(settings.slopeSampleSize, posts.length);
-  const chronPosts = [...posts]
-    .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
-    .slice(-sampleSize);
-
+  // 3. View Velocity Slope (Platform-Aware Linear Regression)
   let viewVelocitySlope = 0;
-  if (chronPosts.length >= settings.minPostsForSlope) {
-    const n = chronPosts.length;
-    const x = Array.from({ length: n }, (_, i) => i);
-    const y = chronPosts.map((p) => p.views / rollingMedianViews);
 
-    const xBar = (n - 1) / 2;
-    const yBar = y.reduce((a, b) => a + b, 0) / n;
+  if (platformFilter !== "ALL") {
+    // Pure platform slope
+    const sample = [...posts]
+      .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
+      .slice(-settings.slopeSampleSize);
 
-    let num = 0;
-    let den = 0;
-    for (let i = 0; i < n; i++) {
-      num += (x[i] - xBar) * (y[i] - yBar);
-      den += Math.pow(x[i] - xBar, 2);
+    if (sample.length >= settings.minPostsForSlope) {
+      viewVelocitySlope = computeOLS(sample.map((p) => p.views / rollingMedianViews));
     }
-    viewVelocitySlope = den === 0 ? 0 : Number((num / den).toFixed(3));
+  } else {
+    // Combined mode: evaluate IG and YT independently so algorithms don't pollute each other
+    const igPosts = posts.filter((p) => p.platform === "INSTAGRAM");
+    const ytPosts = posts.filter((p) => p.platform === "YOUTUBE");
+
+    const sampleIg = igPosts
+      .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
+      .slice(-settings.slopeSampleSize);
+
+    const sampleYt = ytPosts
+      .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
+      .slice(-settings.slopeSampleSize);
+
+    const igMedian =
+      igPosts.length > 0
+        ? Math.max(50, [...igPosts].map((p) => p.views).sort((a, b) => a - b)[Math.floor(igPosts.length / 2)] || 100)
+        : rollingMedianViews;
+
+    const ytMedian =
+      ytPosts.length > 0
+        ? Math.max(50, [...ytPosts].map((p) => p.views).sort((a, b) => a - b)[Math.floor(ytPosts.length / 2)] || 100)
+        : rollingMedianViews;
+
+    const slopeIg = sampleIg.length >= settings.minPostsForSlope ? computeOLS(sampleIg.map((p) => p.views / igMedian)) : null;
+    const slopeYt = sampleYt.length >= settings.minPostsForSlope ? computeOLS(sampleYt.map((p) => p.views / ytMedian)) : null;
+
+    if (slopeIg !== null && slopeYt !== null) {
+      // Pick platform with higher sample volume, or higher absolute slope
+      viewVelocitySlope = sampleIg.length >= sampleYt.length ? slopeIg : slopeYt;
+    } else if (slopeIg !== null) {
+      viewVelocitySlope = slopeIg;
+    } else if (slopeYt !== null) {
+      viewVelocitySlope = slopeYt;
+    } else {
+      viewVelocitySlope = 0;
+    }
   }
 
   // 4. Outlier / Breakout Detection

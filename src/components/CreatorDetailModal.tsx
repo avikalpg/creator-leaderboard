@@ -181,39 +181,66 @@ export function CreatorDetailModal({ creator, onClose }: CreatorDetailModalProps
             </div>
 
             <div className="space-y-2">
-              {creator.recentPosts.map((post) => (
-                <div
-                  key={post.id}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-neutral-900 border border-white/10 flex items-center justify-center text-neutral-400">
-                      <Instagram className="w-3.5 h-3.5 text-pink-400" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-medium text-sm text-white">
-                          {post.views.toLocaleString()} views
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-neutral-500 mt-0.5 font-mono">
-                        <Calendar className="w-3 h-3" />
-                        <span>{new Date(post.publishedAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
+              {creator.recentPosts.map((post) => {
+                const isYouTube =
+                  post.platform === "YOUTUBE" ||
+                  (post.url && (post.url.includes("youtube.com") || post.url.includes("youtu.be")));
 
-                  <a
-                    href={post.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-white hover:text-neutral-300 font-medium px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                return (
+                  <div
+                    key={post.id}
+                    className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors"
                   >
-                    <span>View</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              ))}
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-neutral-900 border border-white/10 flex items-center justify-center text-neutral-400 shrink-0">
+                        {isYouTube ? (
+                          <Youtube className="w-4 h-4 text-red-500" />
+                        ) : (
+                          <Instagram className="w-4 h-4 text-pink-400" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-medium text-sm text-white">
+                            {post.views.toLocaleString()} views
+                          </span>
+                          <span
+                            className={`font-mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                              isYouTube
+                                ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                : "bg-pink-500/10 text-pink-400 border-pink-500/20"
+                            }`}
+                          >
+                            {isYouTube ? "YouTube" : "Instagram"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-neutral-500 mt-0.5 font-mono">
+                          <Calendar className="w-3 h-3" />
+                          <span>{new Date(post.publishedAt).toLocaleDateString()}</span>
+                          {post.title && (
+                            <>
+                              <span>•</span>
+                              <span className="truncate max-w-[200px] sm:max-w-xs text-neutral-400">
+                                {post.title}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <a
+                      href={post.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-white hover:text-neutral-300 font-medium px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors shrink-0"
+                    >
+                      <span>View</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

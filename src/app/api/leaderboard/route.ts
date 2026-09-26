@@ -10,8 +10,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url);
+    const platformParam = (searchParams.get("platform") || "all").toUpperCase();
+    const platformFilter: "ALL" | "INSTAGRAM" | "YOUTUBE" =
+      platformParam === "INSTAGRAM" || platformParam === "YOUTUBE" ? platformParam : "ALL";
+
     const settingsRows = await prisma.setting.findMany();
     const settingsMap = new Map(settingsRows.map((s) => [s.key, s.value]));
 
@@ -29,40 +34,62 @@ export async function GET() {
       include: {
         posts: {
           orderBy: { publishedAt: "desc" },
-          take: 15,
+          take: 20,
         },
       },
     });
 
-    const scoredCreators = creators.map((creator) => {
-      const rawPosts: RawPost[] = creator.posts.map((p) => ({
-        id: p.id,
-        creatorId: p.creatorId,
-        platform: p.platform,
-        externalId: p.externalId,
-        url: p.url,
-        title: p.title,
-        views: p.views,
-        likes: p.likes,
-        comments: p.comments,
-        publishedAt: p.publishedAt,
-      }));
+    const scoredCreators = creators
+      .map((creator) => {
+        const creatorPosts =
+          platformFilter === "ALL"
+            ? creator.posts
+            : creator.posts.filter((p) => p.platform === platformFilter);
 
-      const score = calculateCreatorScore(rawPosts, creator.targetCadence, settings);
+        // If filtering by a specific platform and creator has no handle or posts on that platform, handle cleanly
+        const hasPlatformPresence =
+          platformFilter === "ALL" ||
+          (platformFilter === "INSTAGRAM" && creator.instagramHandle) ||
+          (platformFilter === "YOUTUBE" && (creator.youtubeHandle || creator.youtubeChannelId));
 
-      return {
-        id: creator.id,
-        name: creator.name,
-        houseName: creator.houseName,
-        instagramHandle: creator.instagramHandle,
-        youtubeHandle: creator.youtubeHandle,
-        targetCadence: creator.targetCadence,
-        followersCount: creator.followersCount,
-        bio: creator.bio,
-        recentPosts: creator.posts.slice(0, 5),
-        score,
-      };
-    });
+        if (!hasPlatformPresence && creatorPosts.length === 0) {
+          return null;
+        }
+
+        const rawPosts: RawPost[] = creatorPosts.map((p) => ({
+          id: p.id,
+          creatorId: p.creatorId,
+          platform: p.platform,
+          externalId: p.externalId,
+          url: p.url,
+          title: p.title,
+          views: p.views,
+          likes: p.likes,
+          comments: p.comments,
+          publishedAt: p.publishedAt,
+        }));
+
+        const score = calculateCreatorScore(
+          rawPosts,
+          creator.targetCadence,
+          settings,
+          platformFilter
+        );
+
+        return {
+          id: creator.id,
+          name: creator.name,
+          houseName: creator.houseName,
+          instagramHandle: creator.instagramHandle,
+          youtubeHandle: creator.youtubeHandle,
+          targetCadence: creator.targetCadence,
+          followersCount: creator.followersCount,
+          bio: creator.bio,
+          recentPosts: creatorPosts.slice(0, 8),
+          score,
+        };
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null);
 
     scoredCreators.sort((a, b) => b.score.pointsTotal - a.score.pointsTotal);
     const rankedCreators = scoredCreators.map((c, idx) => ({
@@ -86,6 +113,7 @@ export async function GET() {
       likes: number;
       comments: number;
       title?: string | null;
+      platform?: string;
       ratio: number;
       medianViews: number;
       creator: {
@@ -96,15 +124,20 @@ export async function GET() {
     }> = [];
 
     for (const c of creators) {
-      if (!c.posts || c.posts.length === 0) continue;
-      const sortedViews = c.posts.map((p) => p.views).sort((a, b) => a - b);
+      const postsForOutliers =
+        platformFilter === "ALL"
+          ? c.posts
+          : c.posts.filter((p) => p.platform === platformFilter);
+
+      if (!postsForOutliers || postsForOutliers.length === 0) continue;
+      const sortedViews = postsForOutliers.map((p) => p.views).sort((a, b) => a - b);
       const mid = Math.floor(sortedViews.length / 2);
       const median = Math.max(50, sortedViews[mid] || 100);
 
-      let bestPost = c.posts[0];
+      let bestPost = postsForOutliers[0];
       let bestRatio = bestPost.views / median;
 
-      for (const p of c.posts) {
+      for (const p of postsForOutliers) {
         const r = p.views / median;
         if (r > bestRatio) {
           bestRatio = r;
@@ -120,6 +153,7 @@ export async function GET() {
           likes: bestPost.likes,
           comments: bestPost.comments,
           title: bestPost.title,
+          platform: bestPost.platform,
           ratio: Number(bestRatio.toFixed(1)),
           medianViews: median,
           creator: {

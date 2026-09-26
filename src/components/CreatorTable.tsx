@@ -29,6 +29,8 @@ export interface CreatorRowData {
     views: number;
     url: string;
     publishedAt: string | Date;
+    platform?: string;
+    title?: string | null;
   }>;
   score: {
     consistencyScore: number;

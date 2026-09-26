@@ -8,7 +8,7 @@ import { CreatorTable, CreatorRowData } from "@/components/CreatorTable";
 import { AdminModal } from "@/components/AdminModal";
 import { CreatorDetailModal } from "@/components/CreatorDetailModal";
 import { HowItWorksModal } from "@/components/HowItWorksModal";
-import { Trophy, Shield, Sparkles, RefreshCw } from "lucide-react";
+import { Trophy, Shield, RefreshCw, Instagram, Youtube, Layers } from "lucide-react";
 
 export default function Home() {
   const [creators, setCreators] = useState<CreatorRowData[]>([]);
@@ -19,7 +19,8 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"leaderboard" | "houses" | "breakouts">("leaderboard");
+  const [activeTab, setActiveTab] = useState<"leaderboard" | "houses">("leaderboard");
+  const [platformFilter, setPlatformFilter] = useState<"ALL" | "INSTAGRAM" | "YOUTUBE">("ALL");
 
   // Modals
   const [selectedCreator, setSelectedCreator] = useState<CreatorRowData | null>(null);
@@ -33,10 +34,10 @@ export default function Home() {
     setHowItWorksOpen(true);
   };
 
-  const loadData = async () => {
+  const loadData = async (filter = platformFilter) => {
     try {
       setIsRefreshing(true);
-      const res = await fetch("/api/leaderboard");
+      const res = await fetch(`/api/leaderboard?platform=${filter.toLowerCase()}`);
       if (res.ok) {
         const data = await res.json();
         setCreators(data.creators || []);
@@ -54,8 +55,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData(platformFilter);
+  }, [platformFilter]);
 
   const handleOpenAdmin = (tab: "creator" | "settings" | "sync" = "creator") => {
     setAdminTab(tab);
@@ -118,34 +119,76 @@ export default function Home() {
               onOpenHowItWorks={handleOpenHowItWorks}
             />
 
-            {/* Navigation Tabs (Pill style) */}
-            <div className="flex items-center justify-center sm:justify-start gap-2 mb-6">
-              <button
-                onClick={() => setActiveTab("leaderboard")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium transition-all ${
-                  activeTab === "leaderboard"
-                    ? "bg-white text-black font-semibold shadow-md"
-                    : "bg-white/5 text-neutral-400 hover:text-white border border-white/5 hover:border-white/15"
-                }`}
-              >
-                <Trophy className="w-3.5 h-3.5" />
-                <span>Creator Leaderboard</span>
-              </button>
+            {/* Navigation & Platform Filter Controls Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-2 border-b border-white/5">
+              {/* Primary Navigation Tabs */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab("leaderboard")}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium transition-all ${
+                    activeTab === "leaderboard"
+                      ? "bg-white text-black font-semibold shadow-md"
+                      : "bg-white/5 text-neutral-400 hover:text-white border border-white/5 hover:border-white/15"
+                  }`}
+                >
+                  <Trophy className="w-3.5 h-3.5" />
+                  <span>Creator Leaderboard</span>
+                </button>
 
-              <button
-                onClick={() => setActiveTab("houses")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium transition-all ${
-                  activeTab === "houses"
-                    ? "bg-white text-black font-semibold shadow-md"
-                    : "bg-white/5 text-neutral-400 hover:text-white border border-white/5 hover:border-white/15"
-                }`}
-              >
-                <Shield className="w-3.5 h-3.5" />
-                <span>The House Cup</span>
-                <span className="font-mono text-[10px] bg-neutral-800 px-1.5 py-0.2 rounded-full text-neutral-300">
-                  {houses.length}
-                </span>
-              </button>
+                <button
+                  onClick={() => setActiveTab("houses")}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium transition-all ${
+                    activeTab === "houses"
+                      ? "bg-white text-black font-semibold shadow-md"
+                      : "bg-white/5 text-neutral-400 hover:text-white border border-white/5 hover:border-white/15"
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>The House Cup</span>
+                  <span className="font-mono text-[10px] bg-neutral-800 px-1.5 py-0.2 rounded-full text-neutral-300">
+                    {houses.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* Platform Filter Toggle */}
+              <div className="flex items-center gap-1 p-1 bg-black/50 border border-white/10 rounded-full text-xs font-mono self-start sm:self-auto">
+                <button
+                  onClick={() => setPlatformFilter("ALL")}
+                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+                    platformFilter === "ALL"
+                      ? "bg-white text-black font-semibold shadow-sm"
+                      : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  <Layers className="w-3 h-3" />
+                  <span>All Channels</span>
+                </button>
+
+                <button
+                  onClick={() => setPlatformFilter("INSTAGRAM")}
+                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+                    platformFilter === "INSTAGRAM"
+                      ? "bg-pink-500 text-white font-semibold shadow-sm"
+                      : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  <Instagram className="w-3 h-3" />
+                  <span>Instagram Reels</span>
+                </button>
+
+                <button
+                  onClick={() => setPlatformFilter("YOUTUBE")}
+                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+                    platformFilter === "YOUTUBE"
+                      ? "bg-red-600 text-white font-semibold shadow-sm"
+                      : "text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  <Youtube className="w-3 h-3" />
+                  <span>YouTube</span>
+                </button>
+              </div>
             </div>
 
             {/* Tab Views */}
