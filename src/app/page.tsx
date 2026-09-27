@@ -21,6 +21,7 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"leaderboard" | "houses">("leaderboard");
   const [platformFilter, setPlatformFilter] = useState<"ALL" | "INSTAGRAM" | "YOUTUBE">("ALL");
+  const [platformsData, setPlatformsData] = useState<Record<string, { creators: any[]; houses: any[]; breakouts: any[] }> | null>(null);
 
   // Modals
   const [selectedCreator, setSelectedCreator] = useState<CreatorRowData | null>(null);
@@ -34,15 +35,35 @@ export default function Home() {
     setHowItWorksOpen(true);
   };
 
+  const handleSelectPlatform = (filter: "ALL" | "INSTAGRAM" | "YOUTUBE") => {
+    setPlatformFilter(filter);
+    // Instantaneous 0-latency switch from memory
+    if (platformsData && platformsData[filter]) {
+      setCreators(platformsData[filter].creators);
+      setHouses(platformsData[filter].houses);
+      setBreakouts(platformsData[filter].breakouts);
+    } else {
+      loadData(filter);
+    }
+  };
+
   const loadData = async (filter = platformFilter) => {
     try {
       setIsRefreshing(true);
       const res = await fetch(`/api/leaderboard?platform=${filter.toLowerCase()}`);
       if (res.ok) {
         const data = await res.json();
-        setCreators(data.creators || []);
-        setHouses(data.houses || []);
-        setBreakouts(data.breakouts || []);
+        if (data.platforms) {
+          setPlatformsData(data.platforms);
+          const current = data.platforms[filter] || data.platforms.ALL;
+          setCreators(current.creators || []);
+          setHouses(current.houses || []);
+          setBreakouts(current.breakouts || []);
+        } else {
+          setCreators(data.creators || []);
+          setHouses(data.houses || []);
+          setBreakouts(data.breakouts || []);
+        }
         setSettings(data.settings || null);
         setLastSync(data.lastSync || null);
       }
@@ -56,7 +77,7 @@ export default function Home() {
 
   useEffect(() => {
     loadData(platformFilter);
-  }, [platformFilter]);
+  }, []);
 
   const handleOpenAdmin = (tab: "creator" | "settings" | "sync" = "creator") => {
     setAdminTab(tab);
@@ -65,6 +86,10 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#0D0D0D] text-white flex flex-col selection:bg-white selection:text-black">
+      {/* Network Activity Pulse Indicator for Slow Connections */}
+      {isRefreshing && (
+        <div className="fixed top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400 via-indigo-500 to-pink-500 animate-pulse z-50" />
+      )}
       <Header
         creatorsCount={creators.length}
         housesCount={houses.length}
@@ -154,8 +179,9 @@ export default function Home() {
               {/* Platform Filter Toggle */}
               <div className="flex items-center gap-1 p-1 bg-black/50 border border-white/10 rounded-full text-xs font-mono self-start sm:self-auto">
                 <button
-                  onClick={() => setPlatformFilter("ALL")}
-                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+                  type="button"
+                  onClick={() => handleSelectPlatform("ALL")}
+                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 active:scale-95 ${
                     platformFilter === "ALL"
                       ? "bg-white text-black font-semibold shadow-sm"
                       : "text-neutral-400 hover:text-white"
@@ -166,8 +192,9 @@ export default function Home() {
                 </button>
 
                 <button
-                  onClick={() => setPlatformFilter("INSTAGRAM")}
-                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+                  type="button"
+                  onClick={() => handleSelectPlatform("INSTAGRAM")}
+                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 active:scale-95 ${
                     platformFilter === "INSTAGRAM"
                       ? "bg-pink-500 text-white font-semibold shadow-sm"
                       : "text-neutral-400 hover:text-white"
@@ -178,8 +205,9 @@ export default function Home() {
                 </button>
 
                 <button
-                  onClick={() => setPlatformFilter("YOUTUBE")}
-                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+                  type="button"
+                  onClick={() => handleSelectPlatform("YOUTUBE")}
+                  className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 active:scale-95 ${
                     platformFilter === "YOUTUBE"
                       ? "bg-red-600 text-white font-semibold shadow-sm"
                       : "text-neutral-400 hover:text-white"
