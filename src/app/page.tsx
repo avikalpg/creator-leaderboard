@@ -8,6 +8,7 @@ import { CreatorTable, CreatorRowData } from "@/components/CreatorTable";
 import { AdminModal } from "@/components/AdminModal";
 import { CreatorDetailModal } from "@/components/CreatorDetailModal";
 import { HowItWorksModal } from "@/components/HowItWorksModal";
+import { SubmitReelModal } from "@/components/SubmitReelModal";
 import { Trophy, Shield, RefreshCw, Instagram, Youtube, Layers } from "lucide-react";
 
 export default function Home() {
@@ -29,6 +30,7 @@ export default function Home() {
   const [adminTab, setAdminTab] = useState<"roster" | "creator" | "settings" | "sync">("roster");
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const [activeHowItWorksSection, setActiveHowItWorksSection] = useState<string | null>(null);
+  const [submitReelOpen, setSubmitReelOpen] = useState(false);
 
   const handleOpenHowItWorks = (section?: string) => {
     setActiveHowItWorksSection(section || null);
@@ -96,6 +98,7 @@ export default function Home() {
         lastSyncTime={lastSync?.completedAt}
         onOpenAdmin={handleOpenAdmin}
         onOpenHowItWorks={() => handleOpenHowItWorks()}
+        onOpenSubmitReel={() => setSubmitReelOpen(true)}
         onRefresh={loadData}
         isRefreshing={isRefreshing}
       />
@@ -311,6 +314,13 @@ export default function Home() {
         isOpen={howItWorksOpen}
         activeSection={activeHowItWorksSection}
         onClose={() => setHowItWorksOpen(false)}
+      />
+
+      <SubmitReelModal
+        isOpen={submitReelOpen}
+        onClose={() => setSubmitReelOpen(false)}
+        onSuccess={() => loadData(platformFilter)}
+        creators={creators}
       />
     </div>
   );

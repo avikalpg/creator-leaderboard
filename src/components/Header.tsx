@@ -2,7 +2,7 @@
 
 import React from "react";
 import { GenCLogo } from "./GenCLogo";
-import { Plus, Settings, RefreshCw, HelpCircle } from "lucide-react";
+import { Plus, Settings, RefreshCw, HelpCircle, Sparkles } from "lucide-react";
 
 interface HeaderProps {
   creatorsCount: number;
@@ -10,6 +10,7 @@ interface HeaderProps {
   lastSyncTime?: string;
   onOpenAdmin: (tab?: "creator" | "settings" | "sync") => void;
   onOpenHowItWorks: () => void;
+  onOpenSubmitReel: () => void;
   onRefresh: () => void;
   isRefreshing: boolean;
 }
@@ -20,6 +21,7 @@ export function Header({
   lastSyncTime,
   onOpenAdmin,
   onOpenHowItWorks,
+  onOpenSubmitReel,
   onRefresh,
   isRefreshing,
 }: HeaderProps) {
@@ -66,6 +68,16 @@ export function Header({
             className="p-2 text-neutral-400 hover:text-white bg-neutral-900 hover:bg-neutral-850 border border-white/5 rounded-full transition-all disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-white" : ""}`} />
+          </button>
+
+          <button
+            onClick={onOpenSubmitReel}
+            className="genc-btn-secondary text-xs px-3.5 py-2 flex items-center gap-1.5 border-amber-400/20 hover:border-amber-400/40 text-amber-300"
+            title="Submit an unlisted Trial Reel link or direct video"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Submit Reel</span>
+            <span className="sm:hidden">Submit</span>
           </button>
 
           <button
