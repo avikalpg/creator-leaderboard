@@ -66,8 +66,16 @@ async function fetchReelsViaPuppeteer(browser, handle) {
   try {
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
     const url = `https://www.instagram.com/${handle}/reels/`;
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-    await new Promise((r) => setTimeout(r, 2000));
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // Scroll down to load 30-40 reels so older viral videos don't stop updating
+    await page.evaluate(async () => {
+      window.scrollBy(0, 1500);
+      await new Promise((r) => setTimeout(r, 1200));
+      window.scrollBy(0, 2000);
+      await new Promise((r) => setTimeout(r, 1200));
+    });
 
     const result = await page.evaluate(() => {
       const anchors = Array.from(document.querySelectorAll("a")).filter((a) => a.href && (a.href.includes("/reel/") || a.href.includes("/p/")));
@@ -89,7 +97,7 @@ async function fetchReelsViaPuppeteer(browser, handle) {
         }
       }
 
-      const reels = anchors.slice(0, 15).map((a) => {
+      const reels = anchors.slice(0, 40).map((a) => {
         let viewRaw = (a.innerText || "").trim();
         if (!viewRaw) {
           const span = Array.from(a.querySelectorAll("span"))
