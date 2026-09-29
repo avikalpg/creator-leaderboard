@@ -7,13 +7,99 @@ import {
   RawPost,
 } from "@/lib/scoring";
 
+async function extractInstagramMetadata(url: string) {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      next: { revalidate: 0 },
+    });
+
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const getMeta = (prop: string) => {
+      const match =
+        html.match(new RegExp(`<meta\\s+[^>]*property=["']${prop}["'][^>]*content=["']([^"']+)["']`, "i")) ||
+        html.match(new RegExp(`<meta\\s+[^>]*content=["']([^"']+)["'][^>]*property=["']${prop}["']`, "i"));
+      return match ? match[1] : null;
+    };
+
+    const ogUrl = getMeta("og:url") || url;
+    const ogTitle = getMeta("og:title") || "";
+    const ogDesc = getMeta("og:description") || "";
+
+    const handleMatch = ogUrl.match(/instagram\.com\/([a-zA-Z0-9._]+)\/(?:reel|p)\//i);
+    const handle = handleMatch ? handleMatch[1].toLowerCase() : null;
+
+    const nameMatch = ogTitle.match(/^([^:]+?)\s+on\s+Instagram/i);
+    const authorName = nameMatch ? nameMatch[1].trim() : null;
+
+    let likes = 0;
+    const likesMatch = ogDesc.match(/([\d,.]+)\s*likes?/i);
+    if (likesMatch) {
+      likes = parseInt(likesMatch[1].replace(/,/g, ""), 10) || 0;
+    }
+
+    let comments = 0;
+    const commentsMatch = ogDesc.match(/([\d,.]+)\s*comments?/i);
+    if (commentsMatch) {
+      comments = parseInt(commentsMatch[1].replace(/,/g, ""), 10) || 0;
+    }
+
+    let caption: string | null = null;
+    const captionMatch = ogDesc.match(/:\s*&quot;(.*?)&quot;/s) || ogTitle.match(/:\s*&quot;(.*?)&quot;/s);
+    if (captionMatch) {
+      caption = captionMatch[1].replace(/&#x[0-9a-f]+;/gi, "").trim();
+    }
+
+    return {
+      canonicalUrl: ogUrl,
+      handle,
+      authorName,
+      likes,
+      comments,
+      caption,
+    };
+  } catch (err) {
+    console.error("Error extracting Instagram metadata:", err);
+    return null;
+  }
+}
+
+async function extractYouTubeMetadata(videoId: string, apiKey: string) {
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}&key=${apiKey}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.items || data.items.length === 0) return null;
+
+    const v = data.items[0];
+    return {
+      channelId: v.snippet.channelId,
+      channelTitle: v.snippet.channelTitle,
+      title: v.snippet.title,
+      views: parseInt(v.statistics.viewCount || "0", 10),
+      likes: parseInt(v.statistics.likeCount || "0", 10),
+      comments: parseInt(v.statistics.commentCount || "0", 10),
+    };
+  } catch (err) {
+    console.error("Error extracting YouTube metadata:", err);
+    return null;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { url, creatorId, estimatedViews } = body;
 
     if (!url || typeof url !== "string") {
-      return NextResponse.json({ error: "A valid video/reel URL is required." }, { status: 400 });
+      return NextResponse.json({ error: "Please enter a video or reel link." }, { status: 400 });
     }
 
     const trimmedUrl = url.trim();
@@ -36,26 +122,87 @@ export async function POST(req: Request) {
       normalizedUrl = `https://www.youtube.com/watch?v=${externalId}`;
     } else {
       return NextResponse.json(
-        { error: "Could not recognize format. Please provide a valid Instagram Reel or YouTube Short URL." },
+        { error: "Unrecognized URL. Please provide an Instagram Reel (/reels/...) or YouTube Short link." },
         { status: 400 }
       );
     }
 
-    // 2. Identify the creator
+    // 2. Automatically extract author & views from the link
+    let detectedHandle: string | null = null;
+    let detectedName: string | null = null;
+    let autoLikes = 0;
+    let autoComments = 0;
+    let autoTitle: string | null = null;
+    let autoViews = typeof estimatedViews === "number" && estimatedViews > 0 ? estimatedViews : 0;
+
+    if (platform === "INSTAGRAM") {
+      const igMeta = await extractInstagramMetadata(trimmedUrl);
+      if (igMeta) {
+        detectedHandle = igMeta.handle;
+        detectedName = igMeta.authorName;
+        autoLikes = igMeta.likes;
+        autoComments = igMeta.comments;
+        autoTitle = igMeta.caption;
+        if (autoViews === 0 && autoLikes > 0) {
+          // Conservative estimate based on typical reel like ratio (~5%)
+          autoViews = Math.max(100, Math.round(autoLikes * 20));
+        }
+      }
+    } else if (platform === "YOUTUBE") {
+      const ytKey = process.env.YOUTUBE_API_KEY;
+      if (ytKey) {
+        const ytMeta = await extractYouTubeMetadata(externalId, ytKey);
+        if (ytMeta) {
+          detectedName = ytMeta.channelTitle;
+          autoTitle = ytMeta.title;
+          autoViews = ytMeta.views;
+          autoLikes = ytMeta.likes;
+          autoComments = ytMeta.comments;
+        }
+      }
+    }
+
+    if (autoViews === 0) autoViews = 50;
+
+    // 3. Match the creator in the database
     let creator = null;
+
     if (creatorId) {
       creator = await prisma.creator.findUnique({ where: { id: creatorId } });
     }
 
-    if (!creator) {
-      return NextResponse.json(
-        { error: "Please select which cohort creator this video belongs to." },
-        { status: 400 }
-      );
+    if (!creator && detectedHandle) {
+      creator = await prisma.creator.findFirst({
+        where: {
+          instagramHandle: {
+            equals: detectedHandle,
+          },
+        },
+      });
     }
 
-    // 3. Initial views (defaults to 50 if not specified, will be auto-refreshed by background daemon)
-    const initialViews = typeof estimatedViews === "number" && estimatedViews > 0 ? estimatedViews : 50;
+    if (!creator && detectedName) {
+      creator = await prisma.creator.findFirst({
+        where: {
+          OR: [
+            { name: { contains: detectedName } },
+            { youtubeHandle: { contains: detectedName } },
+          ],
+        },
+      });
+    }
+
+    if (!creator) {
+      const hint = detectedHandle ? `@${detectedHandle}` : detectedName ? `"${detectedName}"` : "this account";
+      return NextResponse.json(
+        {
+          error: `Detected post from ${hint}, but this creator is not registered in the cohort yet. Please add them via Admin Settings first.`,
+          detectedHandle,
+          detectedName,
+        },
+        { status: 404 }
+      );
+    }
 
     // 4. Upsert PostSnapshot
     const post = await prisma.postSnapshot.upsert({
@@ -68,6 +215,10 @@ export async function POST(req: Request) {
       update: {
         creatorId: creator.id,
         url: normalizedUrl,
+        title: autoTitle || undefined,
+        views: autoViews > 0 ? autoViews : undefined,
+        likes: autoLikes > 0 ? autoLikes : undefined,
+        comments: autoComments > 0 ? autoComments : undefined,
         capturedAt: new Date(),
       },
       create: {
@@ -75,15 +226,16 @@ export async function POST(req: Request) {
         platform,
         externalId,
         url: normalizedUrl,
-        views: initialViews,
-        likes: Math.round(initialViews * 0.05),
-        comments: Math.round(initialViews * 0.005),
+        title: autoTitle,
+        views: autoViews,
+        likes: autoLikes,
+        comments: autoComments,
         publishedAt: new Date(),
         capturedAt: new Date(),
       },
     });
 
-    // 5. Load settings & recalculate creator score immediately
+    // 5. Recalculate creator scores
     const settingsRows = await prisma.setting.findMany();
     const settingsMap = new Map(settingsRows.map((s) => [s.key, s.value]));
 
@@ -132,10 +284,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Reel linked to ${creator.name} and indexed. It will be tracked continuously!`,
-      post,
-      score,
+      message: `Matched to ${creator.name} (${creator.houseName})! Reel indexed successfully.`,
       creatorName: creator.name,
+      creatorHouse: creator.houseName,
+      views: autoViews,
+      post,
     });
   } catch (error: any) {
     console.error("Error submitting reel link:", error);

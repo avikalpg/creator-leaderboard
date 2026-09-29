@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Sparkles, CheckCircle, AlertCircle, RefreshCw, Send, Link as LinkIcon } from "lucide-react";
+import { X, Sparkles, CheckCircle, AlertCircle, RefreshCw, Send, Link as LinkIcon, ChevronDown } from "lucide-react";
 import { CreatorRowData } from "./CreatorTable";
 
 interface SubmitReelModalProps {
@@ -13,8 +13,8 @@ interface SubmitReelModalProps {
 
 export function SubmitReelModal({ isOpen, onClose, onSuccess, creators }: SubmitReelModalProps) {
   const [url, setUrl] = useState("");
-  const [creatorId, setCreatorId] = useState("");
-  const [estimatedViews, setEstimatedViews] = useState("");
+  const [manualCreatorId, setManualCreatorId] = useState("");
+  const [showOverride, setShowOverride] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -22,6 +22,8 @@ export function SubmitReelModal({ isOpen, onClose, onSuccess, creators }: Submit
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!url.trim()) return;
+
     setIsLoading(true);
     setStatusMsg(null);
 
@@ -30,25 +32,29 @@ export function SubmitReelModal({ isOpen, onClose, onSuccess, creators }: Submit
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url,
-          creatorId,
-          estimatedViews: estimatedViews ? parseInt(estimatedViews, 10) : undefined,
+          url: url.trim(),
+          creatorId: manualCreatorId || undefined,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to submit reel");
+      if (!res.ok) throw new Error(data.error || "Failed to index video");
 
       setStatusMsg({
         type: "success",
-        text: `Success! Reel added to ${data.creatorName} and queued for background tracking.`,
+        text: `✓ ${data.message || `Reel linked to ${data.creatorName} and indexed.`}`,
       });
 
       setUrl("");
-      setEstimatedViews("");
+      setManualCreatorId("");
+      setShowOverride(false);
       onSuccess();
     } catch (err: any) {
       setStatusMsg({ type: "error", text: err.message });
+      // If creator was not matched automatically, open the manual override selector
+      if (err.message.includes("not registered") || err.message.includes("select")) {
+        setShowOverride(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -68,7 +74,7 @@ export function SubmitReelModal({ isOpen, onClose, onSuccess, creators }: Submit
                 Submit <span className="italic font-normal font-serif text-neutral-300">Trial Reel</span>
               </h3>
               <p className="text-[11px] text-neutral-400">
-                Index unlisted Trial Reels or direct YouTube Shorts
+                Paste any Instagram Trial Reel or YouTube Short
               </p>
             </div>
           </div>
@@ -81,7 +87,7 @@ export function SubmitReelModal({ isOpen, onClose, onSuccess, creators }: Submit
           </button>
         </div>
 
-        {/* Form Body */}
+        {/* Form Body - Single Input UX */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {statusMsg && (
             <div
@@ -102,74 +108,74 @@ export function SubmitReelModal({ isOpen, onClose, onSuccess, creators }: Submit
 
           <div>
             <label className="block font-mono text-[11px] uppercase tracking-wider text-neutral-400 mb-1.5">
-              Video / Reel Permalink *
+              Reel / Video Link
             </label>
             <div className="relative">
               <LinkIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
               <input
                 type="url"
                 required
-                placeholder="https://www.instagram.com/reels/DdoNOniT2ok/ or YT Short"
+                autoFocus
+                placeholder="https://www.instagram.com/reels/DdoNOniT2ok/"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full bg-neutral-900/90 border border-white/10 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
+                className="w-full bg-neutral-900/90 border border-white/10 rounded-xl pl-10 pr-3.5 py-3 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30"
               />
             </div>
-            <p className="text-[10px] text-neutral-500 mt-1">
-              Supports Instagram Trial Reels (`/reels/shortcode`), regular reels, and YouTube Shorts.
+            <p className="text-[10px] text-neutral-500 mt-1.5 leading-relaxed">
+              Creator, handles, views, and engagement are detected automatically from the link.
             </p>
           </div>
 
-          <div>
-            <label className="block font-mono text-[11px] uppercase tracking-wider text-neutral-400 mb-1.5">
-              Creator *
-            </label>
-            <select
-              required
-              value={creatorId}
-              onChange={(e) => setCreatorId(e.target.value)}
-              className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 cursor-pointer"
+          {/* Optional Creator Override (only if needed) */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowOverride(!showOverride)}
+              className="text-[11px] font-mono text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition-colors"
             >
-              <option value="" disabled className="bg-neutral-900">
-                Select your name...
-              </option>
-              {creators.map((c) => (
-                <option key={c.id} value={c.id} className="bg-neutral-900">
-                  {c.name} ({c.houseName})
-                </option>
-              ))}
-            </select>
-          </div>
+              <span>{showOverride ? "Hide creator override" : "Need to manually assign creator?"}</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${showOverride ? "rotate-180" : ""}`} />
+            </button>
 
-          <div>
-            <label className="block font-mono text-[11px] uppercase tracking-wider text-neutral-400 mb-1.5">
-              Current Views (Optional)
-            </label>
-            <input
-              type="number"
-              min="0"
-              placeholder="e.g. 5200"
-              value={estimatedViews}
-              onChange={(e) => setEstimatedViews(e.target.value)}
-              className="w-full bg-neutral-900/90 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 font-mono"
-            />
-            <p className="text-[10px] text-neutral-500 mt-1">
-              If omitted, will default to initial seed and be refreshed automatically by the 15m daemon.
-            </p>
+            {showOverride && (
+              <div className="mt-2.5 p-3 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
+                <label className="block font-mono text-[10px] uppercase tracking-wider text-neutral-400">
+                  Select Creator Manually:
+                </label>
+                <select
+                  value={manualCreatorId}
+                  onChange={(e) => setManualCreatorId(e.target.value)}
+                  className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 cursor-pointer"
+                >
+                  <option value="">Auto-detect from URL (Default)</option>
+                  {creators.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.houseName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isLoading || !url || !creatorId}
+              disabled={isLoading || !url.trim()}
               className="w-full genc-btn-primary py-3 text-xs flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {isLoading ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Inspecting Link & Detecting Creator...</span>
+                </>
               ) : (
-                <Send className="w-3.5 h-3.5" />
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Index Reel</span>
+                </>
               )}
-              <span>Submit & Link to Profile</span>
             </button>
           </div>
         </form>
