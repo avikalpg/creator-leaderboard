@@ -50,7 +50,7 @@ async function extractInstagramMetadata(url: string) {
     }
 
     let caption: string | null = null;
-    const captionMatch = ogDesc.match(/:\s*&quot;(.*?)&quot;/s) || ogTitle.match(/:\s*&quot;(.*?)&quot;/s);
+    const captionMatch = ogDesc.match(/:\s*&quot;([\s\S]*?)&quot;/) || ogTitle.match(/:\s*&quot;([\s\S]*?)&quot;/);
     if (captionMatch) {
       caption = captionMatch[1].replace(/&#x[0-9a-f]+;/gi, "").trim();
     }
