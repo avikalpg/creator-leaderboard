@@ -271,7 +271,7 @@ export function calculateCreatorScore(
     consistencyScore,
     viewVelocitySlope,
     rollingMedianViews,
-    breakoutRatio,
+    breakoutRatio: rawBreakoutRatio,
     isBreakout,
     breakoutPoints,
     engagementDensity,
