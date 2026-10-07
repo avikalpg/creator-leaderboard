@@ -75,52 +75,63 @@ function generatePlatformView(
     settings
   );
 
-  const creatorBreakouts: any[] = [];
-    const windowMs = settings.windowDays * 24 * 60 * 60 * 1000;
+    // Select each creator's single best breakout, sorted by exponential half-life freshness priority
+    const creatorBreakouts: any[] = [];
     const now = Date.now();
+    const halfLifeDays = 14;
 
     for (const c of creators) {
-      const postsForOutliers = (
-        filter === "ALL" ? c.posts : c.posts.filter((p: any) => p.platform === filter)
-      ).filter((p: any) => now - new Date(p.publishedAt).getTime() <= windowMs);
+      const postsForOutliers =
+        filter === "ALL" ? c.posts : c.posts.filter((p: any) => p.platform === filter);
 
       if (!postsForOutliers || postsForOutliers.length === 0) continue;
-    const sortedViews = postsForOutliers.map((p: any) => p.views).sort((a: number, b: number) => a - b);
-    const mid = Math.floor(sortedViews.length / 2);
-    const median = Math.max(50, sortedViews[mid] || 100);
+      const sortedViews = postsForOutliers.map((p: any) => p.views).sort((a: number, b: number) => a - b);
+      const mid = Math.floor(sortedViews.length / 2);
+      const median = Math.max(50, sortedViews[mid] || 100);
 
-    let bestPost = postsForOutliers[0];
-    let bestRatio = bestPost.views / median;
+      let bestPost = postsForOutliers[0];
+      let bestRatio = bestPost.views / median;
+      let bestAge = Math.max(0, (now - new Date(bestPost.publishedAt).getTime()) / (1000 * 60 * 60 * 24));
 
-    for (const p of postsForOutliers) {
-      const r = p.views / median;
-      if (r > bestRatio) {
-        bestRatio = r;
-        bestPost = p;
+      for (const p of postsForOutliers) {
+        const r = p.views / median;
+        const age = Math.max(0, (now - new Date(p.publishedAt).getTime()) / (1000 * 60 * 60 * 24));
+        const priority = r * Math.pow(2, -age / halfLifeDays);
+        const bestPriority = bestRatio * Math.pow(2, -bestAge / halfLifeDays);
+
+        if (priority > bestPriority) {
+          bestRatio = r;
+          bestAge = age;
+          bestPost = p;
+        }
+      }
+
+      const priorityScore = bestRatio * Math.pow(2, -bestAge / halfLifeDays);
+
+      // Only include genuine breakthroughs that carry active priority
+      if (bestRatio >= 2.0 && priorityScore >= 0.8 && bestPost.views >= 100) {
+        creatorBreakouts.push({
+          id: bestPost.id,
+          url: bestPost.url,
+          views: bestPost.views,
+          likes: bestPost.likes,
+          comments: bestPost.comments,
+          title: bestPost.title,
+          platform: bestPost.platform,
+          ratio: Number(bestRatio.toFixed(1)),
+          priorityScore: Number(priorityScore.toFixed(2)),
+          ageDays: Math.round(bestAge),
+          medianViews: median,
+          creator: {
+            name: c.name,
+            houseName: c.houseName,
+            instagramHandle: c.instagramHandle,
+          },
+        });
       }
     }
 
-    if (bestRatio >= 2.0 && bestPost.views >= 100) {
-      creatorBreakouts.push({
-        id: bestPost.id,
-        url: bestPost.url,
-        views: bestPost.views,
-        likes: bestPost.likes,
-        comments: bestPost.comments,
-        title: bestPost.title,
-        platform: bestPost.platform,
-        ratio: Number(bestRatio.toFixed(1)),
-        medianViews: median,
-        creator: {
-          name: c.name,
-          houseName: c.houseName,
-          instagramHandle: c.instagramHandle,
-        },
-      });
-    }
-  }
-
-  creatorBreakouts.sort((a, b) => b.ratio - a.ratio);
+    creatorBreakouts.sort((a, b) => b.priorityScore - a.priorityScore);
 
   return {
     creators: rankedCreators,

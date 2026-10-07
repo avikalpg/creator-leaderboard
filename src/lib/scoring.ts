@@ -31,12 +31,20 @@ export const DEFAULT_SETTINGS: ScoringSettings = {
   momentumHouseWeight: 10.0,
 };
 
+export const HALF_LIFE_DAYS = 14;
+
+export function calculateDecayWeight(ageDays: number, halfLife = HALF_LIFE_DAYS): number {
+  if (ageDays <= 0) return 1.0;
+  return Math.pow(2, -ageDays / halfLife);
+}
+
 export interface CreatorScoreResult {
   consistencyScore: number;
   viewVelocitySlope: number;
   rollingMedianViews: number;
   breakoutRatio: number;
   isBreakout: boolean;
+  breakoutPoints: number;
   engagementDensity: number;
   postsInWindow: number;
   pointsTotal: number;
@@ -95,7 +103,7 @@ export function calculateCreatorScore(
   }
   rollingMedianViews = Math.max(50, rollingMedianViews);
 
-  // 2. Consistency & Regularity (Deduplicating same-day cross-posts)
+  // 2. Consistency & Regularity (Continuous Exponential Half-Life Decay)
   const cadenceTargets: Record<string, number> = {
     DAILY: 7,
     ALTERNATE: 3.5,
@@ -103,14 +111,29 @@ export function calculateCreatorScore(
     WEEKLY: 1,
   };
   const weeklyTarget = cadenceTargets[targetCadence.toUpperCase()] || 3.5;
-  const expectedPosts = (weeklyTarget * settings.windowDays) / 7;
+  // Expected decayed volume over 28 days with 14-day half-life: sum_{d=0}^{27} 2^(-d/14) = 15.526
+  const expectedDecayedVolume = (weeklyTarget / 7) * 15.526;
 
-  // Group same-day posts across platforms so 1 video posted on IG + YT = 1 creative output day
-  const uniqueOutputDays = new Set(
-    recentPosts.map((p) => new Date(p.publishedAt).toISOString().split("T")[0])
+  // Deduplicate same-day posts across platforms by tracking unique output days
+  const uniqueDayAges: number[] = [];
+  const seenDays = new Set<string>();
+
+  for (const p of posts) {
+    const diffDays = (now - new Date(p.publishedAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (diffDays >= 0 && diffDays <= 45) {
+      const dayKey = new Date(p.publishedAt).toISOString().split("T")[0];
+      if (!seenDays.has(dayKey)) {
+        seenDays.add(dayKey);
+        uniqueDayAges.push(diffDays);
+      }
+    }
+  }
+
+  const actualDecayedVolume = uniqueDayAges.reduce(
+    (acc, age) => acc + calculateDecayWeight(age, HALF_LIFE_DAYS),
+    0
   );
-  const effectivePostsCount = uniqueOutputDays.size;
-  const executionRatio = Math.min(1.0, effectivePostsCount / Math.max(1, expectedPosts));
+  const executionRatio = Math.min(1.0, actualDecayedVolume / Math.max(1, expectedDecayedVolume));
 
   let regularityMultiplier = 0.5;
   if (recentPosts.length >= 2) {
@@ -189,22 +212,32 @@ export function calculateCreatorScore(
     }
   }
 
-  // If creator has zero posts in the active window, velocity slope is 0
+  // If creator has zero recent posts, velocity slope is 0
   if (recentPosts.length === 0) {
     viewVelocitySlope = 0;
   }
 
-  // 4. Outlier / Breakout Detection (Strictly within active evaluation window)
-  const maxRecentViews =
-    recentPosts.length > 0
-      ? Math.max(...recentPosts.map((p) => p.views))
-      : 0;
+  // 4. Outlier / Breakout Detection & Exponential Half-Life Decay on Points
+  let rawBreakoutRatio = 0;
+  let breakoutAgeDays = 0;
 
-  const breakoutRatio =
-    recentPosts.length > 0
-      ? Number((maxRecentViews / rollingMedianViews).toFixed(2))
-      : 0;
-  const isBreakout = recentPosts.length > 0 && breakoutRatio >= settings.breakoutThreshold;
+  for (const p of posts) {
+    const diffDays = Math.max(0, (now - new Date(p.publishedAt).getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays <= 60) {
+      const r = p.views / rollingMedianViews;
+      if (r > rawBreakoutRatio) {
+        rawBreakoutRatio = r;
+        breakoutAgeDays = diffDays;
+      }
+    }
+  }
+
+  rawBreakoutRatio = Number(rawBreakoutRatio.toFixed(2));
+  const isBreakout = rawBreakoutRatio >= settings.breakoutThreshold;
+  // The actual points decay smoothly with a 14-day half-life: 30 pts * 2^(-age/14)
+  const breakoutPoints = isBreakout
+    ? Number((30 * calculateDecayWeight(breakoutAgeDays, HALF_LIFE_DAYS)).toFixed(1))
+    : 0;
 
   // 5. Engagement Density
   const totalViews = recentPosts.reduce((acc, p) => acc + p.views, 0);
@@ -220,22 +253,19 @@ export function calculateCreatorScore(
   // 6. Badges
   const badges: string[] = [];
   if (recentPosts.length > 0 && viewVelocitySlope >= 0.5) badges.push("FAST_MOVER");
-  if (isBreakout) badges.push("BREAKOUT_OUTLIER");
+  if (isBreakout && breakoutPoints >= 5.0) badges.push("BREAKOUT_OUTLIER");
   if (consistencyScore >= 80) badges.push("IRON_CREATOR");
   if (engagementDensity >= 8.0) badges.push("HIGH_RESONANCE");
 
-  // 7. Aggregate individual points (Must be active in window to score points)
-  const pointsTotal =
-    recentPosts.length === 0
-      ? 0
-      : Number(
-          (
-            consistencyScore * 0.5 +
-            Math.max(0, viewVelocitySlope) * 15 +
-            (isBreakout ? 30 : 0) +
-            engagementDensity * 2
-          ).toFixed(1)
-        );
+  // 7. Aggregate individual points with continuous exponential decay
+  const pointsTotal = Number(
+    (
+      consistencyScore * 0.5 +
+      Math.max(0, viewVelocitySlope) * 15 +
+      breakoutPoints +
+      engagementDensity * 2
+    ).toFixed(1)
+  );
 
   return {
     consistencyScore,
@@ -314,13 +344,18 @@ export function calculateHouseStandings(
         ? (slopes[mid - 1] + slopes[mid]) / 2
         : slopes[mid];
 
-    const breakoutCount = members.filter((m) => m.score.isBreakout).length;
+    const breakoutCount = members.filter((m) => m.score.isBreakout && m.score.breakoutPoints >= 5.0).length;
+    // Continuous exponential half-life decay on House breakout points
+    const totalHouseBreakoutPoints = members.reduce(
+      (sum, m) => sum + (m.score.isBreakout ? m.score.breakoutPoints * (settings.breakoutHousePoints / 30) : 0),
+      0
+    );
 
     const totalPoints = Number(
       (
         avgDiscipline * settings.consistencyHouseWeight +
         Math.max(0, medianSlope) * settings.momentumHouseWeight +
-        breakoutCount * settings.breakoutHousePoints
+        totalHouseBreakoutPoints
       ).toFixed(1)
     );
 
