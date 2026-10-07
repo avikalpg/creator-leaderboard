@@ -189,16 +189,22 @@ export function calculateCreatorScore(
     }
   }
 
-  // 4. Outlier / Breakout Detection
+  // If creator has zero posts in the active window, velocity slope is 0
+  if (recentPosts.length === 0) {
+    viewVelocitySlope = 0;
+  }
+
+  // 4. Outlier / Breakout Detection (Strictly within active evaluation window)
   const maxRecentViews =
     recentPosts.length > 0
       ? Math.max(...recentPosts.map((p) => p.views))
-      : posts.length > 0
-      ? Math.max(...posts.map((p) => p.views))
       : 0;
 
-  const breakoutRatio = Number((maxRecentViews / rollingMedianViews).toFixed(2));
-  const isBreakout = breakoutRatio >= settings.breakoutThreshold;
+  const breakoutRatio =
+    recentPosts.length > 0
+      ? Number((maxRecentViews / rollingMedianViews).toFixed(2))
+      : 0;
+  const isBreakout = recentPosts.length > 0 && breakoutRatio >= settings.breakoutThreshold;
 
   // 5. Engagement Density
   const totalViews = recentPosts.reduce((acc, p) => acc + p.views, 0);
@@ -213,20 +219,23 @@ export function calculateCreatorScore(
 
   // 6. Badges
   const badges: string[] = [];
-  if (viewVelocitySlope >= 0.5) badges.push("FAST_MOVER");
+  if (recentPosts.length > 0 && viewVelocitySlope >= 0.5) badges.push("FAST_MOVER");
   if (isBreakout) badges.push("BREAKOUT_OUTLIER");
   if (consistencyScore >= 80) badges.push("IRON_CREATOR");
   if (engagementDensity >= 8.0) badges.push("HIGH_RESONANCE");
 
-  // 7. Aggregate individual points
-  const pointsTotal = Number(
-    (
-      consistencyScore * 0.5 +
-      Math.max(0, viewVelocitySlope) * 15 +
-      (isBreakout ? 30 : 0) +
-      engagementDensity * 2
-    ).toFixed(1)
-  );
+  // 7. Aggregate individual points (Must be active in window to score points)
+  const pointsTotal =
+    recentPosts.length === 0
+      ? 0
+      : Number(
+          (
+            consistencyScore * 0.5 +
+            Math.max(0, viewVelocitySlope) * 15 +
+            (isBreakout ? 30 : 0) +
+            engagementDensity * 2
+          ).toFixed(1)
+        );
 
   return {
     consistencyScore,

@@ -6,6 +6,20 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 
+function getInstagramTimestamp(shortcode) {
+  if (!shortcode) return null;
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  let mediaId = BigInt(0);
+  for (let i = 0; i < shortcode.length; i++) {
+    const idx = alphabet.indexOf(shortcode[i]);
+    if (idx === -1) return null;
+    mediaId = (mediaId * BigInt(64)) + BigInt(idx);
+  }
+  const timestampMs = Number((mediaId >> BigInt(23)) + BigInt(1314220021721));
+  const date = new Date(timestampMs);
+  return isNaN(date.getTime()) ? null : date;
+}
+
 function findChromePath() {
   const candidates = [
     "/usr/bin/google-chrome",
@@ -33,17 +47,11 @@ async function getBrowserInstance() {
     return { browser: null, isConnected: false };
   }
 
-  // 1. Try connecting to already running Chrome with remote debugging on port 9222
-  try {
-    const browser = await puppeteer.connect({ browserURL: "http://127.0.0.1:9222" });
-    console.log("Connected to existing Chrome on port 9222.");
-    return { browser, isConnected: true };
-  } catch {}
-
-  // 2. Launch new headless Chrome
+  // Launch dedicated headless Chrome with isolated session directory
   const chromePath = findChromePath();
   if (chromePath) {
-    console.log(`Launching headless Chrome at ${chromePath}...`);
+    const sessionDir = path.join(os.tmpdir(), "genc-chrome-" + Date.now() + "-" + process.pid);
+    console.log(`Launching dedicated headless Chrome at ${chromePath}...`);
     const browser = await puppeteer.launch({
       executablePath: chromePath,
       headless: "new",
@@ -52,9 +60,10 @@ async function getBrowserInstance() {
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
-        "--user-data-dir=/tmp/genc-chrome-session",
+        `--user-data-dir=${sessionDir}`,
       ],
     });
+    browser.__sessionDir = sessionDir;
     return { browser, isConnected: false };
   }
 
@@ -171,9 +180,25 @@ async function fetchYouTubeVideos(handle, apiKey) {
   }
 }
 
+async function withDbRetry(fn, maxRetries = 4) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      console.log(`[NeonDB Connection] Reconnecting query (attempt ${attempt}/${maxRetries})...`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+}
+
+async function getCreatorsWithRetry() {
+  return await withDbRetry(() => prisma.creator.findMany());
+}
+
 async function main() {
   console.log("=== GenC Cohort Sync Engine ===");
-  const creators = await prisma.creator.findMany();
+  const creators = await getCreatorsWithRetry();
   console.log(`Loaded ${creators.length} creators from database.`);
 
   const ytKey = process.env.YOUTUBE_API_KEY;
@@ -201,8 +226,7 @@ async function main() {
           for (let i = 0; i < igData.reels.length; i++) {
             const r = igData.reels[i];
             if (!r.shortcode) continue;
-            const daysAgo = i * 2;
-            const pubDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+            const pubDate = getInstagramTimestamp(r.shortcode) || new Date();
 
             await prisma.postSnapshot.upsert({
               where: { platform_externalId: { platform: "INSTAGRAM", externalId: r.shortcode } },
@@ -263,6 +287,9 @@ async function main() {
       browser.disconnect();
     } else {
       await browser.close();
+      if (browser.__sessionDir && fs.existsSync(browser.__sessionDir)) {
+        try { fs.rmSync(browser.__sessionDir, { recursive: true, force: true }); } catch {}
+      }
     }
   }
 
@@ -272,8 +299,10 @@ async function main() {
   const windowMs = 14 * 24 * 60 * 60 * 1000;
 
   for (const c of creators) {
-    const posts = await prisma.postSnapshot.findMany({ where: { creatorId: c.id }, orderBy: { publishedAt: "asc" } });
-    if (posts.length === 0) continue;
+    const posts = await withDbRetry(() =>
+      prisma.postSnapshot.findMany({ where: { creatorId: c.id }, orderBy: { publishedAt: "asc" } })
+    );
+    if (!posts || posts.length === 0) continue;
 
     const recent = posts.filter((p) => now - new Date(p.publishedAt).getTime() <= windowMs);
     const sortedViews = posts.map((p) => p.views).sort((a, b) => a - b);
@@ -311,30 +340,34 @@ async function main() {
 
     const points = Number((consistency * 0.5 + Math.max(0, slope) * 15 + (isBreakout ? 30 : 0) + engagement * 2).toFixed(1));
 
-    await prisma.metricSnapshot.create({
-      data: {
-        creatorId: c.id,
-        consistencyScore: consistency,
-        viewVelocitySlope: slope,
-        rollingMedianViews: median,
-        breakoutRatio,
-        engagementDensity: engagement,
-        postsInWindow: recent.length,
-        pointsTotal: points,
-      },
-    });
+    await withDbRetry(() =>
+      prisma.metricSnapshot.create({
+        data: {
+          creatorId: c.id,
+          consistencyScore: consistency,
+          viewVelocitySlope: slope,
+          rollingMedianViews: median,
+          breakoutRatio,
+          engagementDensity: engagement,
+          postsInWindow: recent.length,
+          pointsTotal: points,
+        },
+      })
+    );
   }
 
-  await prisma.syncLog.create({
-    data: {
-      status: "SUCCESS",
-      startedAt: new Date(now),
-      completedAt: new Date(),
-      creatorsCount: creators.length,
-      postsCollected: totalCollected,
-      summary: `Automated Home Sync: Collected ${totalCollected} posts across ${creators.length} creators.`,
-    },
-  });
+  await withDbRetry(() =>
+    prisma.syncLog.create({
+      data: {
+        status: "SUCCESS",
+        startedAt: new Date(now),
+        completedAt: new Date(),
+        creatorsCount: creators.length,
+        postsCollected: totalCollected,
+        summary: `Automated Mac Daemon: Collected ${totalCollected} posts across ${creators.length} creators.`,
+      },
+    })
+  );
 
   console.log(`\n🎉 Sync Finished! ${totalCollected} posts updated in NeonDB.`);
 }

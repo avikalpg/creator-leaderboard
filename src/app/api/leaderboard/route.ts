@@ -76,11 +76,15 @@ function generatePlatformView(
   );
 
   const creatorBreakouts: any[] = [];
-  for (const c of creators) {
-    const postsForOutliers =
-      filter === "ALL" ? c.posts : c.posts.filter((p: any) => p.platform === filter);
+    const windowMs = settings.windowDays * 24 * 60 * 60 * 1000;
+    const now = Date.now();
 
-    if (!postsForOutliers || postsForOutliers.length === 0) continue;
+    for (const c of creators) {
+      const postsForOutliers = (
+        filter === "ALL" ? c.posts : c.posts.filter((p: any) => p.platform === filter)
+      ).filter((p: any) => now - new Date(p.publishedAt).getTime() <= windowMs);
+
+      if (!postsForOutliers || postsForOutliers.length === 0) continue;
     const sortedViews = postsForOutliers.map((p: any) => p.views).sort((a: number, b: number) => a - b);
     const mid = Math.floor(sortedViews.length / 2);
     const median = Math.max(50, sortedViews[mid] || 100);
