@@ -273,6 +273,7 @@ export function calculateCreatorScore(
     rollingMedianViews,
     breakoutRatio,
     isBreakout,
+    breakoutPoints,
     engagementDensity,
     postsInWindow: recentPosts.length,
     pointsTotal,
